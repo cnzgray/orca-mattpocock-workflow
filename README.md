@@ -1,95 +1,117 @@
+English | [简体中文](README.zh-CN.md)
+
 # orca-mattpocock-workflow
 
-Orca 插件：在右侧栏运行 [mattpocock/skills](https://github.com/mattpocock/skills) 工作流的工单面板。
+An Orca plugin that runs the [mattpocock/skills](https://github.com/mattpocock/skills) workflow as a
+ticket panel in the right sidebar.
 
-工单的判定规则、triage 标签、提示词手势与流程说明都在本仓库内实现，
-交互按 Orca 插件自身的能力边界设计。
+Ticket triage rules, triage labels, prompt gestures and workflow help all live in this repository.
+The interaction is designed around the capabilities Orca plugins actually expose.
 
-## 视图
+## Views
 
-- **列表**：读当前工作区的工单，按「可接 / 阻塞 / 其他开放 / 已关闭」判定，支持状态过滤与多键排序；
-  工具栏下方还有「分配给我 / 我创建的」两个人员开关，与状态筛选交叉生效，两个都开时取并集；
-  可在**平铺**（默认）与**父子**两种布局间切换：父子模式把子票缩进挂在父票下，父行可折叠整棵子树并显示可见子票数；
-  父票被筛掉或还没加载时，子票升到顶层并显示父级引用徽标；
-  每张票给出技能动作徽标，点击「复制提示词」把 `/implement #40` 这类手势写进剪贴板；
-  能开工的远端工单还有一个「建 worktree」动作，一次点击就建出 Orca 托管的 worktree。
-- **概览**：一屏给出压力总览（规模 / 阻塞 / 时效）、关键数字、状态与分类构成、最该先看的票。
-- **详情**：单张票的时间线、字段、原生阻塞关系。
-- **环境检查**：逐项检查主目录、后端选择、Orca 命令行、CLI 安装与登录、仓库可达、工作区初始化、
-  本地工单目录、面板用到的技能是否安装；失败项给对应原因的可执行修复方式。
-- **流程帮助**：入池与 triage 状态机、需求链、缺陷链、访谈还是画图，以及实现之后的评审与 PR 流程图。
+- **List**: reads the tickets of the current workspace, classifies them as "ready / blocked / other
+  open / closed", and supports status filters and multi-key sorting. Below the toolbar are two people
+  toggles, "Assigned to me" and "Created by me", which combine with the status filter (both on means
+  the union). The list switches between a **flat** layout (default) and a **tree** layout: the tree
+  layout indents child tickets under their parent, and a parent row can collapse its whole subtree and
+  shows its visible child count. When a parent is filtered out or not loaded yet, the child moves to
+  the top level and shows a parent-reference badge. Every ticket gets skill-action
+  badges; "Copy prompt" puts gestures such as `/implement #40` on the clipboard. A remote ticket that
+  can be started also gets a "Create worktree" action that creates an Orca-managed worktree in one
+  click.
+- **Overview**: pressure at a glance (size / blocking / staleness), key numbers, status and category
+  composition, and the tickets to look at first.
+- **Detail**: timeline, fields and native blocking relations for one ticket.
+- **Environment check**: checks the main directory, backend selection, Orca CLI, CLI install and
+  login, repository reachability, workspace initialization, the local ticket directory and the skills
+  the panel uses. Every failure comes with an executable remedy.
+- **Workflow help**: intake and triage state machines, feature chain, bug chain, interview vs. diagram,
+  and the review / PR flow after implementation.
 
-## 能力边界与取舍
+## Capability boundaries and tradeoffs
 
-Orca 插件的能力由宿主给定，下面是本插件在这些边界内给出的做法：
+Orca defines what a plugin may do. These are the choices this plugin makes inside those boundaries:
 
-| 能力 | 本插件的做法 | 说明 |
+| Capability | What this plugin does | Why |
 |---|---|---|
-| 提示词填进当前会话 | **复制提示词** | Orca 插件没有「写会话草稿」的能力；复制后由用户自己粘贴 |
-| 提示词填进新会话 | 不提供 | Orca 的 `agent.launch` 只起终端型 agent，不构成会话草稿 |
-| 注册运行时技能 `/mattwf-feature`、`/mattwf-bug` | 技能文件随插件分发，环境检查里一键安装 | Orca 插件不能贡献技能（`contributes.skills` 是保留点） |
-| 插件私有 HTTP 路由 | 面板 ↔ worker 进程内桥（`orca.plugin.request`） | Orca 面板与 worker 同属一个插件，直接用桥 |
-| 宿主数据根下的缓存目录 | `~/.orca-mattpocock-workflow/cache/` | Orca 没有对应数据根 |
-| 浏览器 `localStorage` 记视图偏好 | `orca.storage` | 插件私有存储，按仓库记筛选、排序与人员开关 |
-| 宿主 `subprocess` 服务 | worker 内 `node:child_process` | worker 是独立 Node 进程 |
+| Put a prompt into the current session | **Copy the prompt** | Orca plugins cannot write a session draft; the user pastes it |
+| Put a prompt into a new session | Not provided | Orca's `agent.launch` starts terminal agents, which is not a session draft |
+| Register runtime skills `/mattwf-feature`, `/mattwf-bug` | Skill files ship with the plugin and the environment check installs them | Orca plugins cannot contribute skills (`contributes.skills` is reserved) |
+| Plugin-private HTTP routes | In-process panel ↔ worker bridge (`orca.plugin.request`) | The panel and worker belong to the same plugin; use the bridge directly |
+| Cache directory under the host data root | `~/.orca-mattpocock-workflow/cache/` | Orca has no matching data root |
+| Browser `localStorage` for view preferences | `orca.storage` | Plugin-private storage; filters, sorting and people toggles are kept per repository |
+| Host `subprocess` service | `node:child_process` inside the worker | The worker is a separate Node process |
 
-「建 worktree」只走 Orca 自己的命令行（`orca worktree create`），不用裸 `git worktree`：
-分支名按仓库约定从票推导（`feat/4-…` / `bugfix/1-…`），工单链接挂到新 worktree 上，
-建完由 Orca 切到新工作区；同分支已有工作区时直接返回既有结果，不会重复创建。
-自建 Gitea / GitHub 的 `/issues/<n>` 没有 Orca 认得的 provider 路由，不传 `--reference`，
-工单链接改补进 `--comment`，仍然建出工作区；`/pull/<n>`、`/pulls/<n>` 与 GitLab 的
-`/-/issues|merge_requests/<n>` 继续挂载。
+"Create worktree" only goes through Orca's own CLI (`orca worktree create`), never a bare
+`git worktree`. The branch name is derived from the ticket with the repository convention
+(`feat/4-…` / `bugfix/1-…`), the ticket link is attached to the new worktree, and Orca switches to
+the new workspace afterwards. If a workspace already exists on the same branch, the existing result
+is returned and nothing is created twice. Self-hosted Gitea / GitHub `/issues/<n>` URLs have no
+provider route Orca recognizes, so the plugin omits `--reference` and puts the ticket link into
+`--comment`; the worktree is still created. `/pull/<n>`, `/pulls/<n>` and GitLab's
+`/-/issues|merge_requests/<n>` stay attached.
 
-判定语义统一为一套：可接 / 阻塞 / 已关闭、triage 标签（`needs-triage`、`wontfix`、`ready-for-human` …）、
-`Blocked by:` 解析、GitLab 原生阻塞合并。
+Triage semantics are one set: ready / blocked / closed, triage labels (`needs-triage`, `wontfix`,
+`ready-for-human` …), `Blocked by:` parsing and GitLab native blocking merged into the same model.
 
-## 工作区怎么认
+## How the workspace is resolved
 
-Orca 右侧栏是全局的，面板没有「当前会话的工作区」可用。worker 依次尝试：
+Orca's right sidebar is global, so the panel has no "current session workspace" to read. The worker
+tries, in order:
 
-1. 用户在面板顶部候选里显式选过的工作区（选择记在当前聚焦上下文里，也写进插件私有存储，
-   worker 重启或面板重载后仍有效；只有聚焦上下文换了才失效）；
-2. 聚焦工作区的显示名与工作区名精确匹配（忽略大小写与首尾空格），再退到仓库名匹配；
-   空白显示名不参与匹配，显示名与分支同名时也不当作唯一线索——未命名工作区的显示名会退化成
-   分支名，`main` 会被大量工作区共用；
-3. 显示名重名时用分支收窄；
-4. 仍重名时读终端标题里的工作目录（`~/path/to/repo` 也认），唯一命中即采用；
-5. 还是认不出：面板顶部列出候选（项目 · 名称 · 分支 · 路径，每行一个「使用」动作），
-   用户点一下就选定；同一份候选只推一次，失败不再周期性自动重试——只有聚焦上下文变化或
-   用户主动刷新时才重新尝试。
+1. The workspace the user explicitly picked in the panel's candidate list. The pick is stored in the
+   current focus context and in plugin-private storage, so it survives worker restarts and panel
+   reloads; only a change of focus context invalidates it.
+2. An exact match between the focused workspace's display name and the workspace name (ignoring case
+   and surrounding whitespace), then a fallback to the repository name. Blank display names do not
+   participate, and a display name equal to the branch name is not treated as a unique clue:
+   unnamed workspaces fall back to their branch name, and `main` is shared by many workspaces.
+3. A duplicate display name is narrowed by branch.
+4. If names still collide, the working directory in the terminal title is read (`~/path/to/repo`
+   works too); a unique hit wins.
+5. If the workspace is still unknown, the panel lists candidates (project · name · branch · path,
+   each with a "Use" action) and the user picks one. The same candidate list is pushed once; failures
+   are not retried periodically, only when the focus context changes or the user refreshes.
 
-worker 侧的 `workspace.readContext` 会带工作区 id（与 `workspace.list` 的 id 同源）：有 id 时
-直接按 id 认领，「当前上下文」也按 id 识别，两个仓库的 `main` 不会混在一起。旧宿主不给 id 时，
-才退回上面的规则，用显示名 + 分支识别上下文；那时两个同名同分支的工作区无法区分，显式选择也按
-这个粒度记住。
+The worker-side `workspace.readContext` carries a workspace id (the same id as `workspace.list`).
+With an id, the worker claims the workspace by id and identifies the "current context" by id, so two
+repositories' `main` branches never mix. Older hosts that do not provide an id fall back to the rules
+above using display name + branch; in that case two workspaces with the same name and branch cannot be
+distinguished, and an explicit pick is remembered at that granularity.
 
-## 工单后端
+## Ticket backends
 
-按 `origin` 远端自动选择，四种后端共用同一套判定与提示词：
+The backend is selected from the `origin` remote. All four share one set of triage rules and prompts:
 
-- `github.com` → GitHub（`gh`）
-- `gitlab.com` 或 `glab` 已登录的自建实例 → GitLab（`glab`），支持嵌套 group
-- `tea` 已登录的自建 Gitea 实例 → Gitea（`tea`）
-- 其余情况 → 本地 Markdown（`.scratch/<feature>/issues/*.md`）
+- `github.com` → GitHub (`gh`)
+- `gitlab.com`, or a self-hosted instance where `glab` is logged in → GitLab (`glab`), nested groups
+  supported
+- A self-hosted Gitea instance where `tea` is logged in → Gitea (`tea`)
+- Everything else → local Markdown (`.scratch/<feature>/issues/*.md`)
 
-远端后端在列表快照里带每张票的分配人登录名与当前登录用户：GitHub 在同一次 GraphQL 查询里
-取 `viewer.login` 与 `assignees[].login`，GitLab / Gitea 的列表响应自带分配人、另发一次身份查询。
-本地 Markdown 没有创建人与分配人，因此不显示人员筛选行。
+Remote backends include each ticket's assignee logins and the signed-in user in the list snapshot:
+GitHub fetches `viewer.login` and `assignees[].login` in the same GraphQL query; GitLab / Gitea list
+responses already carry assignees, plus one separate identity lookup. Local Markdown has no creators
+or assignees, so the people-filter row is not shown.
 
-本地快照库（`~/.orca-mattpocock-workflow/cache/`）保存当前用户与每张票的分配人；
-格式版本已升到 3，旧版本条目按没有缓存处理，升级后第一次打开会全量重拉一次。
-身份查询临时失败时沿用同一仓库上一次已知的身份，人员筛选不会因为一次抖动整行消失。
+The local snapshot store (`~/.orca-mattpocock-workflow/cache/`) keeps the signed-in user and each
+ticket's assignees. Its format version is now 3; entries of older versions are treated as no cache,
+so the first open after upgrading does one full refetch. When the identity lookup fails
+transiently, the last known identity for the same repository is kept, so one hiccup does not make
+the people-filter row disappear.
 
-父子关系按后端能力取用，只用于列表布局，不改变判定、统计或写操作：
+Parent-child relations are taken according to backend capability and are used only for list layout;
+they do not change verdicts, statistics or write operations:
 
-| 后端 | 父子来源 | 说明 |
+| Backend | Source | Notes |
 |---|---|---|
-| GitHub | 原生子工单 | 列表查询同时取父票；跨仓库父票保留 `owner/name#编号`，不误配同号票 |
-| GitLab | 工作项层级 | 任务挂在工单下用 `#iid`；epic 只保留 `&iid` 引用，不画 epic 行；层级查询失败时父子模式禁用，刷新重试 |
-| Gitea | 无 | 没有原生子工单，父子模式禁用并说明；平铺照常 |
-| 本地 Markdown | `Parent:` 约定 | 只认同一 feature 下的工单；见下 |
+| GitHub | Native sub-issues | The list query also fetches parents; cross-repository parents keep `owner/name#number` and are never matched to a same-numbered ticket |
+| GitLab | Work-item hierarchy | Tasks under an issue use `#iid`; epics keep only an `&iid` reference and get no epic row; if the hierarchy query fails the tree layout is disabled and a refresh retries |
+| Gitea | None | No native child tickets; the tree layout is disabled with an explanation; the flat layout works as usual |
+| Local Markdown | `Parent:` convention | Only tickets in the same feature; see below |
 
-本地 Markdown 工单的正文前言（`## Comments` 之前）支持这些行：
+The front matter of a local Markdown ticket body (before `## Comments`) supports these lines:
 
 ```
 Status: ready-for-agent
@@ -97,53 +119,123 @@ Blocked by: 01, 03
 Parent: 01
 ```
 
-`Parent:` 取第一个数字，指向同一 feature 目录下的另一张工单；指向不存在的票、指向自己或跨
-feature 时按无父级处理。评论里的 `Parent:` 不改变层级。增量刷新会把变更票引用的父票文件一并读入，
-只改子文件也不会丢父级。
+`Parent:` takes the first number and points to another ticket in the same feature directory; a
+pointer to a missing ticket, to itself or across features counts as no parent. A `Parent:` inside a
+comment does not change the hierarchy. Incremental refreshes also read the parent files referenced
+by changed tickets, so changing only a child file never loses its parent.
 
-## 开发
+## Development and publishing
 
-用 Orca 命令行加载开发插件：
+Development loads the plugin through an Orca development folder; publishing distributes it as a Git
+tree. Both use the same build, but the publish tree must contain the built artifacts.
+
+### Development
+
+Load the development plugin with the Orca CLI:
 
 ```bash
-pnpm install      # 自动构建一次
+pnpm install      # builds once
 pnpm typecheck
 pnpm test
-pnpm build        # 产物 dist/worker/main.mjs、dist/panel/panel.{html,js}
+pnpm build        # artifacts: dist/worker/main.mjs, dist/panel/panel.{html,js,css}
 
-orca plugin dev load .    # 打印授权指纹，照抄它给的 --approve 命令重跑一次
-orca plugin dev watch .   # 持续打印日志与重载；--shot ./shots --shot-panel tickets 存面板截图
+orca plugin dev load .    # prints an approval fingerprint; rerun with the --approve command it prints
+orca plugin dev watch .   # streams logs and reloads; --shot ./shots --shot-panel tickets saves panel shots
 ```
 
-改了 `src/` 要先 `pnpm build` 再 `orca plugin dev reload`，worker 跑的是 `dist/` 里的产物。
-如果新增或改名了 RPC 处理器，`reload` 后仍报
-`unknown_method: no panel handler named …`，说明还是旧 worker：用
-`orca plugin dev unload . && orca plugin dev load .` 强制换一个 worker。
-完整的开发流程——审批指纹、调试 worker 请求、造事件、看日志与截图——见
-[docs/development.md](docs/development.md)。
+After changing `src/`, run `pnpm build` before `orca plugin dev reload`; the worker runs the
+artifacts in `dist/`. If you add or rename an RPC handler and `reload` still reports
+`unknown_method: no panel handler named …`, the old worker is still running: force a new one with
+`orca plugin dev unload . && orca plugin dev load .`. The full development flow — approval
+fingerprints, debugging worker requests, emitting events, logs and screenshots — is in
+[docs/development.md](docs/development.md).
 
-清单指向 `dist/` 里的产物，`dist/` 不进版本库；克隆后 `pnpm install` 会自动构建一次，
-发布前确认 `pnpm build` 通过。
+Only four files under `dist/` are committed: the worker entry, the panel page, the panel script and
+the panel theme styles. Source maps are generated locally and are not committed. Cloning the
+repository and running `pnpm install` builds once; you do not need to commit artifacts during
+development.
 
-装成本机正式插件（不再走 dev load）用文件夹安装：
+To install it as a regular local plugin (instead of dev load), use a folder install:
 
 ```bash
-pnpm build && pnpm run pack:plugin        # 产出 .orca/plugin-package
+pnpm build && pnpm run pack:plugin        # produces .orca/plugin-package
 orca plugin dev unload .
-orca plugin install .orca/plugin-package   # 首次按提示带 --approve <指纹>
+orca plugin install .orca/plugin-package   # the first time, rerun with --approve <fingerprint> as prompted
 ```
 
-仓库根不能直接装——`node_modules` 里的符号链接会被拒绝；细节与更新方式见
-[docs/development.md](docs/development.md#装成本机正式插件)。
+The repository root cannot be installed directly — the symlinks in `node_modules` are rejected; see
+[docs/development.md](docs/development.md#installing-as-a-regular-local-plugin) for details and
+updates.
 
-## 已知限制
+### Publishing
 
-- 提示词只能复制，不能直接写进会话：Orca 插件没有会话草稿接口。
-- 入池技能（`mattwf-feature`、`mattwf-bug`）靠环境检查里的安装动作写进 agent 技能目录，
-  插件本身不能注册运行时技能。
-- 后端 CLI（`gh` / `glab` / `tea`）在 worker 进程里直接调用，走的是用户 PATH，
-  不经过 Orca 自己的 CLI 解析与 WSL 回退。
+The publish tree is the set of files in the commit a version tag points at. Orca installs only from a
+Git tree: npm registry and Release attachments are not channels. Pasting an address such as
+`…/releases/download/…` into `orca plugin install` does not fail; it resolves to the default branch
+and installs a source tree with no artifacts.
 
-## 许可证
+The publish tree must satisfy:
+
+- The four build artifacts are committed: `dist/worker/main.mjs`, `dist/panel/panel.html`,
+  `dist/panel/panel.js` and `dist/panel/theme.css`; generate them with `pnpm build:release`; source
+  maps are not committed;
+- The repository root contains no symlinks, submodules or unknown entries (Orca's content validation
+  rejects them);
+- `LICENSE` and the manifest's `license` field agree;
+- The manifest `version` matches the annotated `vX.Y.Z` tag;
+- `main` is the default branch: versionless installs read this commit;
+- The repository is public and carries the `orca-plugin` topic (the catalog condition; a private
+  repository can only be installed by Git URL).
+
+Tag the release commit with an annotated tag, then run the single gate. The check targets `HEAD`, so a
+missing tag fails immediately:
+
+```bash
+git tag -a v0.1.0 -m v0.1.0
+pnpm release:check
+```
+
+It exports the publish tree from the current commit, runs Orca's own offline validator, rebuilds and
+compares the four artifacts, checks the version tag, license, topic and repository visibility, and
+prints an entry ready to paste into a catalog file. It needs the local Orca CLI; `gh` is only used to
+read the topic and visibility and degrades to a warning when unavailable.
+
+Push the commit and tag after it passes:
+
+```bash
+git push origin HEAD v0.1.0
+```
+
+Users install a pinned version:
+
+```bash
+orca plugin install cnzgray/orca-mattpocock-workflow@v0.1.0
+```
+
+The first install requires one approval; the approval page lists capabilities and contributions.
+Adding capabilities, commands, panels or event subscriptions, or raising the execution tier, triggers
+a new approval. Listing status:
+`https://www.onorca.dev/plugins/cnzgray/orca-mattpocock-workflow`.
+
+## Languages
+
+- The panel follows the `language` plugin setting (`auto` / `zh-CN` / `en`); `auto` follows Orca's
+  locale. Message catalogs live in `src/protocol/i18n.ts`.
+- Public documentation is maintained in English and Simplified Chinese (`*.zh-CN.md`). Agent
+  operating docs (`AGENTS.md`, `CLAUDE.md`, `docs/agents/`) and skill prompts stay in Simplified
+  Chinese because they configure this repository's Chinese-language agent workflow.
+- Orca's manifest schema has no per-locale fields, so the manifest description and command titles are
+  English; everything rendered inside the panel is localized. The documentation index and language
+  policy are in [docs/README.md](docs/README.md).
+
+## Known limitations
+
+- Prompts can only be copied, not written into a session: Orca plugins have no session draft API.
+- Intake skills (`mattwf-feature`, `mattwf-bug`) are written into agent skill directories by the
+  environment check's install action; the plugin cannot register runtime skills itself.
+- Backend CLIs (`gh` / `glab` / `tea`) are invoked directly inside the worker process using the
+  user's PATH, without Orca's own CLI resolution and WSL fallback.
+
+## License
 
 MIT

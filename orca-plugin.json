@@ -3,7 +3,8 @@
   "id": "mattpocock-workflow",
   "name": "MattWorkflow",
   "version": "0.1.0",
-  "description": "Matt Pocock 工作流面板：工单 triage 判定、积压概览、环境检查，一键复制工单技能提示词或建 Orca worktree。",
+  "description": "Matt Pocock workflow panel: ticket triage, backlog overview, environment checks, one-click prompt copy, and Orca worktree creation.",
+  "license": "MIT",
   "author": {
     "name": "zgray"
   },
@@ -25,12 +26,12 @@
     "commands": [
       {
         "id": "mattwf.refresh",
-        "title": "MattWorkflow: 刷新工单",
+        "title": "MattWorkflow: Refresh tickets",
         "when": "workspace"
       },
       {
         "id": "mattwf.open-workspace",
-        "title": "MattWorkflow: 在 Orca 里打开当前工作区",
+        "title": "MattWorkflow: Open current workspace in Orca",
         "when": "workspace"
       }
     ],

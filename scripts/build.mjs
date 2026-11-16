@@ -3,37 +3,18 @@
  *   dist/worker/main.mjs   Orca worker 入口（Node，ESM，打包第三方依赖）
  *   dist/panel/panel.html  面板页面，自带 bundle 与主题变量注入点
  *   dist/panel/panel.js    面板应用（React 自打包，因为 Orca 面板不提供宿主 React）
+ *   dist/panel/theme.css   面板主题样式
+ *
+ * `pnpm build` 生成带 source map 的开发产物；`pnpm build:release` 生成入库产物，
+ * 不写 source map。发布就绪检查用同一套参数在导出的发布树里重建，产物字节才能与
+ * 入库文件直接比对。
  */
 import { cp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 
 import { build, context } from 'esbuild'
 
-const rootDir = resolve(import.meta.dirname, '..')
-const watch = process.argv.includes('--watch')
-
-const workerOptions = {
-  entryPoints: [resolve(rootDir, 'src/worker/main.ts')],
-  outfile: resolve(rootDir, 'dist/worker/main.mjs'),
-  bundle: true,
-  platform: 'node',
-  format: 'esm',
-  target: 'node22',
-  sourcemap: true,
-  logLevel: 'info'
-}
-
-const panelOptions = {
-  entryPoints: [resolve(rootDir, 'src/panel/main.tsx')],
-  outfile: resolve(rootDir, 'dist/panel/panel.js'),
-  bundle: true,
-  platform: 'browser',
-  format: 'iife',
-  target: 'es2022',
-  jsx: 'automatic',
-  sourcemap: true,
-  logLevel: 'info'
-}
+const repoRoot = resolve(import.meta.dirname, '..')
 
 const panelHtml = `<!doctype html>
 <html lang="zh-CN">
@@ -57,19 +38,87 @@ const panelHtml = `<!doctype html>
 </html>
 `
 
-await rm(resolve(rootDir, 'dist'), { recursive: true, force: true })
-await mkdir(resolve(rootDir, 'dist/panel'), { recursive: true })
-await writeFile(resolve(rootDir, 'dist/panel/panel.html'), panelHtml)
+function workerOptions({ rootDir, distDir, logLevel, nodePaths, sourcemap }) {
+  return {
+    absWorkingDir: rootDir,
+    entryPoints: [resolve(rootDir, 'src/worker/main.ts')],
+    outfile: resolve(distDir, 'worker/main.mjs'),
+    bundle: true,
+    platform: 'node',
+    format: 'esm',
+    target: 'node22',
+    sourcemap,
+    logLevel,
+    ...(nodePaths === undefined ? {} : { nodePaths }),
+  }
+}
 
-if (watch) {
-  const worker = await context(workerOptions)
-  const panel = await context(panelOptions)
+function panelOptions({ rootDir, distDir, logLevel, nodePaths, sourcemap }) {
+  return {
+    absWorkingDir: rootDir,
+    entryPoints: [resolve(rootDir, 'src/panel/main.tsx')],
+    outfile: resolve(distDir, 'panel/panel.js'),
+    bundle: true,
+    platform: 'browser',
+    format: 'iife',
+    target: 'es2022',
+    jsx: 'automatic',
+    sourcemap,
+    logLevel,
+    ...(nodePaths === undefined ? {} : { nodePaths }),
+  }
+}
+
+async function prepareDist({ rootDir, distDir }) {
+  await rm(distDir, { recursive: true, force: true })
+  await mkdir(resolve(distDir, 'panel'), { recursive: true })
+  await writeFile(resolve(distDir, 'panel/panel.html'), panelHtml)
+}
+
+/**
+ * 从 rootDir 的源码构建一份完整产物到 distDir。
+ *
+ * @param {{
+ *   rootDir: string,
+ *   distDir?: string,
+ *   logLevel?: 'info' | 'warning' | 'silent',
+ *   nodePaths?: string[],
+ *   sourcemap?: boolean,
+ * }} options
+ */
+export async function buildPlugin({
+  rootDir,
+  distDir = resolve(rootDir, 'dist'),
+  logLevel = 'info',
+  nodePaths,
+  sourcemap = true,
+}) {
+  await prepareDist({ rootDir, distDir })
+  await build(workerOptions({ rootDir, distDir, logLevel, nodePaths, sourcemap }))
+  await build(panelOptions({ rootDir, distDir, logLevel, nodePaths, sourcemap }))
+  await cp(resolve(rootDir, 'src/panel/theme.css'), resolve(distDir, 'panel/theme.css'))
+}
+
+async function watchPlugin({ rootDir, distDir }) {
+  await prepareDist({ rootDir, distDir })
+  await cp(resolve(rootDir, 'src/panel/theme.css'), resolve(distDir, 'panel/theme.css'))
+
+  const worker = await context(workerOptions({ rootDir, distDir, logLevel: 'info' }))
+  const panel = await context(panelOptions({ rootDir, distDir, logLevel: 'info' }))
   await worker.watch()
   await panel.watch()
   console.log('watching: worker + panel')
-} else {
-  await build(workerOptions)
-  await build(panelOptions)
-  await cp(resolve(rootDir, 'src/panel/theme.css'), resolve(rootDir, 'dist/panel/theme.css'))
-  console.log('build ok')
+}
+
+const invokedDirectly =
+  process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.filename
+
+if (invokedDirectly) {
+  if (process.argv.includes('--watch')) {
+    await watchPlugin({ rootDir: repoRoot, distDir: resolve(repoRoot, 'dist') })
+  } else {
+    const release = process.argv.includes('--release')
+    await buildPlugin({ rootDir: repoRoot, sourcemap: !release })
+    console.log(release ? 'build:release ok' : 'build ok')
+  }
 }

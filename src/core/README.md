@@ -1,64 +1,86 @@
+English | [简体中文](README.zh-CN.md)
+
 # core
 
-纯业务逻辑：工单模型、远端解析、后端选择、本地 Markdown 解析、工单详情与变更规划、指标与压力判档、环境检查的顺序与依赖判定等。
+Pure business logic: the ticket model, remote parsing, backend selection, local Markdown parsing,
+ticket details and change planning, metrics and pressure tiers, and the ordering and dependency rules
+of the environment check.
 
-- 不做任何 IO：不读写文件、不发网络请求、不启动子进程；
-- 正式代码只依赖自己；允许用 `import type` 引用 `protocol` 里的纯类型（例如 `BackendKind`），
-  不产生运行时依赖（由 `.dependency-cruiser.json` 的 `core-is-pure` 规则检查）；
-- 行、分支、函数覆盖率都不低于 80%（由 `vitest.config.ts` 检查）。
+- No IO: no file reads or writes, no network requests, no child processes;
+- Production code depends only on itself; `import type` may reference pure types from `protocol`
+  (for example `BackendKind`) without creating a runtime dependency (a convention, not a tool-enforced
+  rule);
+- Line, branch and function coverage target at least 80% (there is no CI enforcing it today).
 
-工单详情相关：
+Ticket details:
 
-- `ticket.ts` 里的 `TicketDetail` / `TicketComment` / `TicketPatch` 是适配器与宿主共用的模型；
-  `Ticket` 上的 `parent` 是父级引用，`TrackerSnapshot` / `TrackerChanges` 的 `hierarchy`
-  声明父子能力来源（`native` / `convention` / `none`）；两者只用于列表组织，不参与判定；
-  详情里的创建人、评论作者与分配人都是结构化的 `TicketAuthor`（登录名 / 展示名 / 头像地址），
-  写侧的分配人补丁仍是登录名数组；
-- `author.ts` 是远端用户的唯一解析入口：`readAuthor` / `readAuthors` 按各后端字段名取值，
-  登录名为空时整条用户按 null 处理（不从列表里消失），头像只放行 http(s) 绝对地址，
-  实例内相对路径按后端给出的基准补全；列表与详情共用同一份规则。`readLogins` 用同样的容错口径
-  只取登录名，供列表快照的分配人使用（不读展示名与头像）；
-- `snapshot-store.ts` 是本地快照库的条目模型（格式版本 3）：保存当前用户 `viewer` 与每张票的
-  分配人登录名 `assignees`；版本不符、字段缺失或类型不对时整份作废，由宿主自动全量重拉；
-- `ticket-detail.ts` 只做纯计算与字段校验：目标集合与当前集合的差异（`diffSets` / `resolveTargetSet` /
-  `planSetChange` / `isEmptyDiff`），以及三个远端后端共用的详情字段读取（`readRequiredString`、
-  `readNameList`、`sortCommentsByTime`、`requireTicketNumber`、`invalidDetail`）；
-  「分配给我」由适配器解析用户名后作为 `self` 并入目标集合；
-- 补全候选的归一化也在这里：`normalizeLabelColor` 把颜色统一成小写 `#rrggbb`，
-  `dedupeBy` 按名字去重并保留首次出现的顺序；
-- `markdown.ts` 里的 `parseMarkdownDetail` 把本地工单文件切成标题、正文与评论段落；
-  `parseMarkdownTickets` 同时解析 `Parent:` 行：只看 `## Comments` 之前，取第一个数字，
-  只认同 feature 下的另一张工单；缺失、自引用与跨 feature 都按无父级处理；
-- `snapshot-store.ts` 的条目格式版本升到 3，保存快照级的 `hierarchy` 与工单级的 `parent`；
-  版本不符或枚举非法时整份作废，避免把缺父子字段的旧缓存当成完整的树；
-- `worktree.ts` 推导 worktree 的分支名、工作区名与注释（工作区名与分支名同值），按 Orca 的 URL 路由表判定工单链接能否挂载
-  （自建 Gitea / GitHub 的 `/issues/<n>` 不挂，链接补进注释），拼装 Orca 命令行参数，并解析它的 JSON 输出；
-- `repository-scope.ts` 解析 `git worktree list --porcelain`，给出仓库作用域（主 worktree 根目录）
-  与缓存键：托管后端按仓库归并，本地 Markdown 按工作区隔离；
-- `orca-cli.ts` 决定 Orca 命令行的候选顺序并校验 `--version` 输出，Linux 上同名读屏软件会被排除。
+- `ticket.ts` defines the `TicketDetail` / `TicketComment` / `TicketPatch` model shared by adapters and
+  the host. `parent` on `Ticket` is the parent reference, and `hierarchy` on `TrackerSnapshot` /
+  `TrackerChanges` declares the hierarchy capability source (`native` / `convention` / `none`); both
+  are used only for list organization and take no part in verdicts. Creators, comment authors and
+  assignees in details are structured `TicketAuthor` values
+  (login / display name / avatar URL); assignee patches on the write side remain login arrays.
+- `author.ts` is the only entry point for remote users: `readAuthor` / `readAuthors` read fields by
+  backend-specific names, treat a whole user as null when the login is empty (without dropping the
+  row), and accept only absolute http(s) avatar URLs, completing instance-relative paths against the
+  backend-provided base. Lists and details share these rules. `readLogins` uses the same tolerance
+  but reads logins only, for the assignees in list snapshots (no display names or avatars).
+- `snapshot-store.ts` is the entry model of the local snapshot store (format version 3): it keeps the
+  signed-in user `viewer`, each ticket's assignee logins `assignees`, the snapshot-level `hierarchy`
+  and the ticket-level `parent`. A version mismatch, a missing or mistyped field, or an invalid enum
+  voids the whole entry and the host refetches everything, so an old cache without hierarchy fields
+  is never taken as a complete tree.
+- `ticket-detail.ts` only performs pure computation and field validation: set differences
+  (`diffSets` / `resolveTargetSet` / `planSetChange` / `isEmptyDiff`) and detail-field readers shared
+  by the three remote backends (`readRequiredString`, `readNameList`, `sortCommentsByTime`,
+  `requireTicketNumber`, `invalidDetail`). "Assign to me" resolves the adapter's username and merges
+  it into the target set as `self`.
+- Completion candidates are normalized here too: `normalizeLabelColor` lowercases colors to
+  `#rrggbb`, and `dedupeBy` removes duplicates by name while keeping first-seen order.
+- `markdown.ts`'s `parseMarkdownDetail` splits a local ticket file into title, body and comment
+  sections. `parseMarkdownTickets` also parses `Parent:` lines: it looks only before `## Comments`,
+  takes the first number, and accepts only another ticket in the same feature; missing, self and
+  cross-feature references count as no parent.
+- `worktree.ts` derives worktree branch names, workspace names and comments (workspace name equals
+  branch name), decides whether a ticket URL can be attached using Orca's URL routing table (a
+  self-hosted Gitea / GitHub `/issues/<n>` is not attached and the link goes into the comment),
+  builds the Orca CLI arguments, and parses its JSON output.
+- `repository-scope.ts` parses `git worktree list --porcelain` and yields the repository scope (the
+  main worktree root) and cache keys: managed backends group by repository, local Markdown is isolated
+  by workspace.
+- `orca-cli.ts` decides the Orca CLI candidate order and validates the `--version` output; on Linux a
+  same-named screen reader is excluded.
 
-## 指标与压力判档（`metrics.ts`）
+## Metrics and pressure tiers (`metrics.ts`)
 
-`computeMetrics` 接收已判定的工单、快照时间、总数、时间数据可用性与阈值，输出指标、三个压力维度与关注清单。
-判定与文案分离：core 只给档位、触发指标与缺口原因（`light` / `normal` / `tight`、`MetricGap`），中文文案在界面的
-`overview-text.ts` 里，改文案不会改判定。
+`computeMetrics` takes classified tickets, the snapshot time, totals, time-data availability and
+thresholds, and returns metrics, three pressure dimensions and an attention list. Classification and
+copy are separate: core returns tiers, triggering metrics and gap reasons (`light` / `normal` /
+`tight`, `MetricGap`); Chinese copy lives in the UI's `overview-text.ts`, so changing copy never
+changes the verdict.
 
-阈值集中在 `PRESSURE_THRESHOLDS`，三条规则：
+Thresholds live in `PRESSURE_THRESHOLDS`; three rules:
 
-| 维度 | 看什么                   | 轻松                    | 吃紧                     |
-| ---- | ------------------------ | ----------------------- | ------------------------ |
-| 规模 | 开放积压、近 30 天净流入 | 积压 < 10 且净流入 ≤ 0  | 积压 ≥ 30 或净流入 ≥ 6   |
-| 阻塞 | 阻塞票 ÷ 开放票          | < 15%                   | > 35%                    |
-| 时效 | 陈旧率、停滞票           | 陈旧率 < 20% 且停滞 ≤ 3 | 陈旧率 > 40% 或停滞 ≥ 11 |
+| Dimension | What it looks at | Light | Tight |
+| --- | --- | --- | --- |
+| Size | Open backlog, net inflow over the last 30 days | backlog < 10 and net inflow ≤ 0 | backlog ≥ 30 or net inflow ≥ 6 |
+| Blocking | Blocked tickets ÷ open tickets | < 15% | > 35% |
+| Staleness | Stale rate, stalled tickets | stale rate < 20% and stalled ≤ 3 | stale rate > 40% or stalled ≥ 11 |
 
-总档位取三者中最重的一维。**初稿校准**：用本插件仓库（20 张票、开放 10、近 30 天新开 20、关闭 10、净流入 +10）核对，
-积压 10 张判“正常”、净流入 +10 判“吃紧”；结论是初稿对刚建立、票全在窗口内的仓库偏严。阈值是初稿，后续校准只改
-`PRESSURE_THRESHOLDS`，判定逻辑与界面文案不动。
+The overall tier is the heaviest of the three. **Initial calibration**: checked against this plugin's
+own repository (20 tickets, 10 open, 20 opened and 10 closed in the last 30 days, net inflow +10).
+A backlog of 10 was rated "normal" and net inflow +10 "tight"; the conclusion was that the first
+draft was too strict for a just-created repository whose tickets all fall inside the window.
+Thresholds are a first draft; later calibration only changes `PRESSURE_THRESHOLDS`, never the
+classification logic or UI copy.
 
-数据诚实性：本地 Markdown 的文件时间不算工单时间（`timestamps: false`），时效维度整体标“不可用”（`tier: null`），
-流量指标也标不可用；后端不给关闭时间时关闭类指标标 `no-closed-time`；GitHub 列表查询给不出依赖边时链深度标
-`no-dependency-edges`。不可得指标一律用 `null` + `gap` 表达，不用 0 冒充。样本被截断时，关闭类指标可能低估，
-由关闭数派生的净流入可能高估，界面分别标注。
+Data honesty: local Markdown file timestamps are not ticket timestamps (`timestamps: false`), so the
+staleness dimension is marked "unavailable" (`tier: null`) and flow metrics are unavailable too. When
+a backend gives no close time, closed metrics are marked `no-closed-time`; when a GitHub list query
+cannot provide dependency edges, chain depth is marked `no-dependency-edges`. Unavailable metrics are
+always `null` + `gap`, never 0. When the sample is truncated, closed metrics may be underestimated and
+net inflow derived from closures may be overestimated; the UI labels both cases separately.
 
-阻塞依赖边用 `Ticket.ref` 而不是裸编号：远端是 `#15`，本地 Markdown 是相对路径。本地编号只在同一个 feature 内唯一，
-裸编号无法跨 feature 找回票，链深度也就无从计算。
+Blocking dependency edges use `Ticket.ref` instead of a bare number: a remote ref is `#15`, a local
+Markdown ref is a relative path. Local numbers are unique only within one feature, so a bare number
+cannot find a ticket across features and chain depth cannot be computed.

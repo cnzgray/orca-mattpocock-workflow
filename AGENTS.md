@@ -12,4 +12,4 @@ Issues 与 spec 住在 `cnzgray/orca-mattpocock-workflow` 的 GitHub Issues（�
 
 ### Domain docs
 
-单上下文（single-context）：仓库根 `GLOSSARY.md` + `docs/adr/`；两处都还不存在，按需生长。见 `docs/agents/domain.md`。
+单上下文（single-context）：仓库根 `GLOSSARY.zh-CN.md`（中文代理用这份；英文写作规范版是 `GLOSSARY.md`）+ `docs/adr/`；`docs/adr/` 还不存在，按需生长。见 `docs/agents/domain.md`。

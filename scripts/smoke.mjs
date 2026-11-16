@@ -5,6 +5,8 @@
 import { readFile, stat } from 'node:fs/promises'
 import { resolve } from 'node:path'
 
+import { PLUGIN_ARTIFACTS } from './lib/publish-readiness.mjs'
+
 const rootDir = resolve(import.meta.dirname, '..')
 
 const failures = []
@@ -28,9 +30,9 @@ async function requireFile(relative, label) {
   return false
 }
 
-await requireFile('dist/worker/main.mjs', 'worker 产物')
-await requireFile('dist/panel/panel.js', '面板脚本')
-await requireFile('dist/panel/panel.html', '面板页面')
+for (const { path, label } of PLUGIN_ARTIFACTS) {
+  await requireFile(path, label)
+}
 
 if (await exists('dist/panel/panel.html')) {
   const html = await readFile(resolve(rootDir, 'dist/panel/panel.html'), 'utf8')

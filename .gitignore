@@ -1,5 +1,11 @@
 node_modules/
-dist/
+/dist/**
+!/dist/worker/
+!/dist/worker/main.mjs
+!/dist/panel/
+!/dist/panel/panel.html
+!/dist/panel/panel.js
+!/dist/panel/theme.css
 .idea/
 .DS_Store
 *.log

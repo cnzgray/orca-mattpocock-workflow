@@ -9,6 +9,8 @@
   },
   "scripts": {
     "build": "node scripts/build.mjs",
+    "build:release": "node scripts/build.mjs --release",
+    "release:check": "node scripts/release-check.mjs",
     "pack:plugin": "node scripts/pack.mjs",
     "prepare": "node scripts/build.mjs",
     "dev": "node scripts/build.mjs --watch",

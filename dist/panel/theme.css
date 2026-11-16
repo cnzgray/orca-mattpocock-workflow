@@ -1,0 +1,59 @@
+/*
+ * MattWorkflow 面板主题。
+ *
+ * Orca 往面板文档里注入 `--orca-*` 设计令牌（浅色/深色两套），
+ * 这里把它们映射成面板自己的语义变量：面板样式只认 `--mwf-*`，
+ * 换主题时只改这一处。宿主没注入令牌时用中性色兜底。
+ *
+ * 深浅色跟随宿主：宿主在 <html> 上放 `light` / `dark` 类，
+ * 这里只在深色下改写强调色与语义色。
+ */
+
+:root {
+  --mwf-text: var(--orca-foreground, #1f2328);
+  --mwf-text-secondary: var(--orca-muted-foreground, #57606a);
+  --mwf-text-tertiary: color-mix(in srgb, var(--orca-foreground, #1f2328) 62%, transparent);
+  --mwf-border: var(--orca-border, rgba(128, 128, 128, 0.25));
+  --mwf-border-strong: color-mix(in srgb, var(--orca-foreground, #1f2328) 28%, transparent);
+  --mwf-surface: var(--orca-background, transparent);
+  --mwf-surface-raised: var(--orca-card, Canvas);
+  --mwf-surface-active: var(--orca-accent, rgba(128, 128, 128, 0.18));
+  --mwf-track: var(--orca-muted, rgba(128, 128, 128, 0.12));
+  --mwf-accent: var(--orca-primary, #0969da);
+  /* 强调色底上的文字：Orca 深色主题的主色是浅灰，必须跟随宿主的前景令牌，不能写死白色。 */
+  --mwf-accent-foreground: var(--orca-primary-foreground, #fff);
+  --mwf-success: #1a7f37;
+  --mwf-warn: #9a6700;
+  --mwf-error: var(--orca-destructive, #cf222e);
+}
+
+.dark {
+  --mwf-accent-foreground: var(--orca-primary-foreground, #171717);
+  --mwf-success: #3fb950;
+  --mwf-warn: #d29922;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: transparent;
+  color: var(--mwf-text);
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 13px;
+}
+
+/* 面板内容区允许滚动，滚动条不占位。 */
+[data-mattwf-panel] ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+[data-mattwf-panel] ::-webkit-scrollbar-thumb {
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--mwf-text) 20%, transparent);
+}

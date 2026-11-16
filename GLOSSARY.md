@@ -1,111 +1,161 @@
-# 术语表
+English | [简体中文](GLOSSARY.zh-CN.md)
 
-本仓库的领域术语。文档、issue、测试名里出现这些概念时用这里的词。
+# Glossary
 
-## 仓库作用域
+Domain terms used in this repository. When docs, issues or test names use these concepts, use the
+words defined here.
 
-一个仓库的主 worktree 根目录，作为工单缓存的**仓库级身份**。
+## Repository scope
 
-- 取 `git worktree list --porcelain` 输出里第一条仍然存在的 `worktree <path>`；
-  主 worktree 目录被删掉时顺延到下一条存在的。
-- 解析失败（不是 git 仓库、没装 git、输出不可解析）时退回当前工作区根目录。
-- 托管后端（GitHub / GitLab / Gitea）的本地快照库条目、内存快照、首屏去重、增量链与后端解析结果
-  都按它归并：同一仓库的多个 worktree 共用一份。
-- 它只是缓存身份，不是命令位置：git / gh / glab / tea 仍然在当前工作区里跑。
+The root directory of a repository's main worktree, used as the **repository-level identity** for
+ticket caches.
 
-代码：`src/core/repository-scope.ts`（纯解析与缓存键）、`src/worker/repository-scope.ts`（跑命令）。
-引入于 #7。
+- Read the first surviving `worktree <path>` line from `git worktree list --porcelain`; when the main
+  worktree directory has been deleted, fall through to the next surviving one.
+- When resolution fails (not a git repository, git missing, unparsable output), fall back to the
+  current workspace root.
+- Managed backends (GitHub / GitLab / Gitea) group local snapshot-store entries, in-memory snapshots,
+  first-screen deduplication, incremental chains and backend resolution results by this identity:
+  multiple worktrees of the same repository share one copy.
+- It is a cache identity, not a command location: git / gh / glab / tea still run in the current
+  workspace.
 
-## 工作区作用域
+Code: `src/core/repository-scope.ts` (pure parsing and cache keys), `src/worker/repository-scope.ts`
+(runs the command). Introduced in #7.
 
-当前工作区根目录（面板请求里的 `workspaceRoot`），作为**本地 Markdown 后端**的缓存身份。
+## Workspace scope
 
-- 本地 Markdown 的「仓库」就是当前工作区里的 `.scratch/` 目录树，天然是工作区本地的；
-  按工作区隔离，一个 worktree 的本地工单不会串到另一个。
-- 非 git 目录里，仓库作用域退回工作区根目录，两者是同一份缓存。
+The current workspace root (the `workspaceRoot` in panel requests), used as the **cache identity**
+for the local Markdown backend.
 
-缓存键的选择只写在一处：`storeKeyOf`（托管后端用仓库作用域，本地 Markdown 用工作区作用域）。
-引入于 #7。
+- The local Markdown "repository" is the `.scratch/` directory tree inside the current workspace, so
+  it is naturally workspace-local. It is isolated per workspace: a ticket in one worktree never leaks
+  into another.
+- In a non-git directory, repository scope falls back to the workspace root, so both scopes are the
+  same cache.
 
-面板的视图偏好（筛选、排序键、方向、两个人员开关与布局）走同一条规则，但面板拿不到仓库作用域，
-用快照里的仓库身份代替：`viewPreferenceKey`（`src/panel/view-preference.ts`）。
+The cache-key choice lives in one place: `storeKeyOf` (managed backends use repository scope, local
+Markdown uses workspace scope). Introduced in #7.
 
-_避免_：把仓库作用域叫成「仓库根」「repo root」——那容易被理解成当前 worktree 的 git 顶层目录，
-而附属 worktree 的顶层目录恰恰不是仓库作用域。
+The panel's view preference (filter, sort key, direction, the two people toggles and layout) follows the same rule, but the panel
+cannot see repository scope, so it uses the repository identity from the snapshot instead:
+`viewPreferenceKey` (`src/panel/view-preference.ts`).
 
-## 当前用户（viewer）
+_Avoid_: calling repository scope "repository root" or "repo root" — that reads as the git top-level
+directory of the current worktree, and an attached worktree's top-level directory is exactly not the
+repository scope.
 
-列表快照里的当前登录用户：远端后端是 GitHub GraphQL 的 `viewer.login`、GitLab 的
-`glab api user` 的 `username`、Gitea 的 `tea api /user` 的 `login`；本地 Markdown 没有远端用户，
-恒为 `null`。
+## Viewer
 
-- 存在快照的 `viewer` 字段与本地快照库条目里，只保存登录名；
-- 身份查询失败时不当作列表失败，只把 `viewer` 记为 `null`（全量）或省略（增量，沿用上一次）；
-- 全量刷新返回 `null` 但同一仓库有上一次已知身份时沿用上次，避免一次抖动让人员筛选整行消失；
-- 界面用它在筛选行显示 `@登录名`，并做大小写不敏感的匹配。
+The currently signed-in user in a list snapshot: GitHub GraphQL's `viewer.login`, GitLab's
+`username` from `glab api user`, Gitea's `login` from `tea api /user`. Local Markdown has no remote
+user, so it is always `null`.
 
-代码：`src/core/ticket.ts`（`TrackerSnapshot.viewer`）、`src/protocol/tracker.ts`
-（`WorkspaceSnapshot.viewer`）。
+- Stored in the snapshot's `viewer` field and in local snapshot-store entries, as the login only.
+- A failed identity lookup is not a list failure: `viewer` is recorded as `null` (full refresh) or
+  omitted (incremental refresh, keeping the previous value).
+- When a full refresh returns `null` but the same repository has a previously known identity, the
+  previous one is kept, so one transient failure does not make the people-filter row disappear.
+- The UI shows `@login` in the filter row and matches case-insensitively.
 
-## 人员筛选
+Code: `src/core/ticket.ts` (`TrackerSnapshot.viewer`), `src/protocol/tracker.ts`
+(`WorkspaceSnapshot.viewer`).
 
-列表视图里的两个独立开关：「分配给我」与「我创建的」。数据来自快照里的当前用户与每张票的
-分配人登录名；匹配只在 `src/panel/ticket-view.ts` 的展示逻辑里实现一次。
+## People filter
 
-- 两个都关：不按人员过滤；只开一个：只看对应角色；两个都开：取并集（分配给我 ∪ 我创建的）；
-- 与状态筛选交叉生效，顺序固定为状态过滤 → 人员过滤 → 排序；
-- 计数按当前状态筛选后的集合计算，两个角色互不影响；状态分段与统计仍基于整份快照；
-- 登录名比较不区分大小写；创建人为 `null`（本地 Markdown、被匿名）不算「我创建的」；
-- 当前用户为 `null` 时整行不渲染，已保存的开关保留，等身份恢复后重新生效。
+Two independent toggles in the list view: "Assigned to me" and "Created by me". The data comes from
+the snapshot's viewer and each ticket's assignee logins; matching is implemented once, in the
+presentation logic of `src/panel/ticket-view.ts`.
 
-分配人在列表快照里只存远端登录名（`Ticket.assignees` / `TicketSnapshot.assignees`），
-不存展示名与头像；详情里的结构化 `TicketAuthor` 分配人不变。详情里改分配人后，列表快照不会立即
-写回（`assignSelf` 需要再查一次当前用户），由下一次刷新拉齐；这期间人员筛选可能仍按旧分配人判断。
+- Both off: no people filtering; one on: only that role; both on: the union (assigned to me ∪
+  created by me).
+- Combined with the status filter in a fixed order: status filter → people filter → sort.
+- Counts are computed on the status-filtered set, and the two roles do not affect each other; the
+  status segments and statistics are still based on the whole snapshot.
+- Login comparison is case-insensitive; a `null` creator (local Markdown, anonymized) never counts as
+  "created by me".
+- When the viewer is `null`, the whole row is not rendered; saved toggles are kept and take effect
+  again once the identity is back.
 
-## 平铺模式
+List snapshots store assignees as remote logins only (`Ticket.assignees` /
+`TicketSnapshot.assignees`), without display names or avatars; the structured `TicketAuthor`
+assignees in details are unchanged. Changing assignees in a detail does not immediately write back
+to the list snapshot (`assignSelf` would need another viewer lookup); the next refresh catches up,
+and until then the people filter may still use the old assignees.
 
-列表的默认布局：所有票按当前筛选与排序排成一条线，不显示折叠、子票数或父级徽标。
-判定、统计与提示词行为与父子模式完全相同。
+## Flat layout
 
-代码：`src/panel/ticket-tree.ts` 的 `buildTicketRows`（`flat` 分支）与
-`src/panel/view-preference.ts` 的 `layout: 'flat'`。引入于 #14。
+The default list layout: all tickets in one line, by the current filter and sort, with no
+collapsing, child counts or parent badges. Verdicts, statistics and prompts behave exactly as in the
+tree layout.
 
-## 父子模式
+Code: the `flat` branch of `buildTicketRows` in `src/panel/ticket-tree.ts` and `layout: 'flat'` in
+`src/panel/view-preference.ts`. Introduced in #14.
 
-按**父子关系**把子票缩进挂在父票下的列表布局。父票可折叠 / 展开整棵子树，
-父行显示当前可见树里的后代数。只改变布局，不改变可接 / 阻塞 / 已关闭判定、
-筛选、排序、统计或加载更多。
+## Tree layout
 
-代码：`src/panel/ticket-tree.ts`（树构建、循环与缺失父级降级）、
-`src/panel/tickets-view.tsx`（折叠状态与定位展开）。引入于 #14。
+The list layout that indents child tickets under their parent by **parent-child relation**. A parent
+can collapse / expand its whole subtree, and a parent row shows its descendant count in the currently
+visible tree. It only changes layout; it does not change ready / blocked / closed verdicts,
+filtering, sorting, statistics or load-more.
 
-## 父子能力
+Code: `src/panel/ticket-tree.ts` (tree building, cycle and missing-parent fallback),
+`src/panel/tickets-view.tsx` (collapse state and expand-on-locate). Introduced in #14.
 
-快照声明的父子关系来源：
+## Hierarchy capability
 
-- `native`：后端提供原生父子工单（GitHub 子工单、GitLab 工作项层级）；
-- `convention`：按正文约定推导（本地 Markdown 的 `Parent:` 行）；
-- `none`：Gitea 没有原生子工单，或本次刷新取不到层级。
+Where the parent-child relations declared by a snapshot come from:
 
-为 `none` 时面板禁用父子模式并说明原因，平铺照常。字段是 `hierarchy`。引入于 #14。
+- `native`: the backend has native child tickets (GitHub sub-issues, GitLab work-item hierarchy);
+- `convention`: derived from a body convention (the `Parent:` line in local Markdown);
+- `none`: Gitea has no native child tickets, or this refresh could not fetch the hierarchy.
 
-## 父子关系
+With `none`, the panel disables the tree layout and explains why; the flat layout works as usual.
+The field is `hierarchy`. Introduced in #14.
 
-一张票挂在另一张票下的组织关系，来源见**父子能力**。只用于列表布局：
-不做状态汇总，父票不会因为子票全完成就自动变成可接，子票也不会因为父票阻塞就被判成阻塞。
+## Parent-child relation
 
-## 父票 / 子票
+The organizational relation of one ticket hanging under another; see **Hierarchy capability** for
+sources. Used only for list layout: there is no status roll-up, a parent does not become ready
+because all its children are done, and a child is not judged blocked because its parent is blocked.
 
-同一列表里可作为父级的工单叫**父票**，挂在它下面的叫**子票**。
-父子模式里父票可折叠整棵子树并显示可见后代数；父级不在当前视图时，子票升到顶层并显示父级引用徽标。
+## Parent ticket / child ticket
 
-## 父级引用
+A ticket in the same list that can act as a parent is a **parent ticket**; tickets under it are
+**child tickets**. In the tree layout a parent can collapse its whole subtree and shows its visible
+descendant count; when the parent is not in the current view, the child moves to the top level and
+shows a parent-reference badge.
 
-工单上的 `parent` 字段，只存引用字符串，不复制父票的标题、状态或对象。
-形状与 `ref` 一致：同列表里的票是 `#编号` 或相对文件路径；列表外父级是
-`owner/name#编号`（GitHub 跨仓库父票）或 `&iid`（GitLab epic）。父级不在当前可见票里时，
-子票升到顶层并显示父级引用徽标，不伪造父行。
+## Parent reference
 
-代码：`src/core/ticket.ts` / `src/protocol/tracker.ts` 的 `parent` 字段。引入于 #14。
+The `parent` field on a ticket. It stores only a reference string and never copies the parent's
+title, status or object. Its shape matches `ref`: a ticket in the same list is `#number` or a
+relative file path; a parent outside the list is `owner/name#number` (a cross-repository GitHub
+parent) or `&iid` (a GitLab epic). When the parent is not among the currently visible tickets, the
+child moves to the top level and shows a parent-reference badge; no fake parent row is made up.
 
-_避免_：把父级引用叫成「父票对象」或「父票快照」——它只有引用，父票信息仍从当前列表查。
+Code: the `parent` field in `src/core/ticket.ts` / `src/protocol/tracker.ts`. Introduced in #14.
+
+_Avoid_: calling a parent reference a "parent object" or "parent snapshot" — it is only a reference;
+parent information is still looked up from the current list.
+
+## Publish tree
+
+The set of files in the commit a version tag points at: the bytes Orca installs and the catalog sees.
+
+- A Git tree is the only distribution carrier: the npm registry and Release attachments are not Orca
+  plugin channels.
+- Four build artifacts are committed: the worker entry, the panel page, the panel script and the panel
+  theme styles; generate them with `pnpm build:release`; source maps are not committed.
+- `main` is also the default branch: versionless installs read this commit, pinned installs use
+  `vX.Y.Z`.
+- The repository root must not contain symlinks, submodules or unknown entries.
+- The publish-readiness check (`pnpm release:check`) is the only gate: it exports the publish tree
+  from HEAD, runs Orca's validation, rebuilds and compares the artifacts in the tree, checks the
+  version tag, license and topic, and finally prints the catalog entry.
+
+Code: `scripts/release-check.mjs` (runner), `scripts/lib/publish-readiness.mjs` (verdict). Introduced
+in #11.
+
+_Avoid_: treating an `orca plugin dev load` development folder as a distribution format — it never
+goes through a Git tree and is never listed by the catalog.

@@ -1,59 +1,91 @@
+English | [简体中文](README.zh-CN.md)
+
 # adapters
 
-对接外部系统，每个后端一个子目录：
+Adapters for external systems, one subdirectory per backend:
 
-- `github/`：通过 `git` 与 `gh` 读取 `github.com` 仓库的 issue；
-- `gitlab/`：通过 `git` 与 `glab` 读取 GitLab issue；列表带 `blocking_issues_count` 时直接判定支持原生阻塞，原生阻塞数在 `resolveBlockers` 补齐阶段读取：否则按实例主机只探测一次，支持时用一次批量 GraphQL 取回阻塞数，失败或空数组时退回 `Blocked by:` 行；要求 `glab` >= 1.126，更早版本未验证；
-- `gitea/`：通过 `git` 与 `tea` 读取 Gitea issue 与原生 issue 依赖（只读 `tea api --include`）；
-  依赖功能关闭时退回 `Blocked by:` 行。宿主选择后端时探测 `tea logins list --output json`；
-- `markdown/`：读取工作区里 `.scratch/<feature>/issues/*.md` 的本地工单；`env.ts` 供环境检查确认工单目录与文件可解析；
-- `fs/`：环境检查用的文件系统能力（解析用户主目录、判断文件是否存在）与本地快照库
-  （`~/.orca-mattpocock-workflow/cache`，主目录不可写时退回系统临时目录）；
-- `github/`、`gitlab/`、`gitea/` 里的 `env.ts`：环境检查的命令行探测（CLI 是否安装、是否登录、仓库是否可达）；
-  Gitea 的登录列表与仓库访问复用工单后端的调用方式与解析函数。
+- `github/`: reads issues from `github.com` repositories through `git` and `gh`.
+- `gitlab/`: reads GitLab issues through `git` and `glab`. When a list carries
+  `blocking_issues_count`, native blocking is considered supported directly; native blocking counts
+  are read during the `resolveBlockers` completion phase. Otherwise the adapter probes once per
+  instance host and, when supported, fetches blocking counts with one batch GraphQL query; on failure
+  or an empty array it falls back to `Blocked by:` lines. Requires `glab` >= 1.126; earlier versions
+  are untested.
+- `gitea/`: reads Gitea issues and native issue dependencies through `git` and `tea` (read-only
+  `tea api --include`); falls back to `Blocked by:` lines when the dependency feature is off. When
+  the host selects the backend it probes `tea logins list --output json`.
+- `markdown/`: reads local tickets from `.scratch/<feature>/issues/*.md` in the workspace; `env.ts`
+  lets the environment check confirm that the ticket directory and files can be parsed.
+- `fs/`: filesystem capabilities for the environment check (resolving the user's home directory,
+  testing whether a file exists) and the local snapshot store
+  (`~/.orca-mattpocock-workflow/cache`, falling back to the system temporary directory when the home
+  directory is not writable).
+- `env.ts` in `github/`, `gitlab/` and `gitea/`: CLI probes for the environment check (is the CLI
+  installed, is it logged in, is the repository reachable). Gitea's login list and repository access
+  reuse the ticket backend's calls and parsers.
 
-每个后端的 `tracker.ts` 实现列表契约，`detail.ts` 实现可选的详情与变更能力，
-`options.ts` / `delete.ts` 实现补全候选与删除，共用 `shared.ts` 里的仓库识别、命令执行与错误映射：
+Each backend's `tracker.ts` implements the list contract, `detail.ts` implements optional detail and
+mutation capabilities, and `options.ts` / `delete.ts` implement completion candidates and deletion.
+They share repository detection, command execution and error mapping in `shared.ts`:
 
-| 后端          | 详情正文       | 评论                           | 链接地址 | 标签写 | 分配人写                        | 状态写 | 补全候选                                                   | 删除                                                               |
-| ------------- | -------------- | ------------------------------ | -------- | ------ | ------------------------------- | ------ | ---------------------------------------------------------- | ------------------------------------------------------------------ |
-| GitHub        | 是             | GraphQL（评论按 `hasNextPage` 翻页，单页 100） | 是       | 是     | 是                              | 是     | `gh label list`；`gh api .../assignees --paginate --slurp` | `gh issue delete --yes`；`viewerPermission` 为 `ADMIN`             |
-| GitLab        | 是             | notes 接口（跳过 system note） | 是       | 是     | 是（整体替换，清空用 `!` 前缀） | 是     | labels 与 members/all 分页（只保留 active 成员）           | `glab api --method DELETE`；Owner（access_level ≥ 50）或实例管理员 |
-| Gitea         | 是             | comments 接口                  | 是       | 是     | 是（`--set-assignees`）         | 是     | labels 分页（每页 50 条）与 assignees                      | `tea api --method DELETE`；`permissions.admin`                     |
-| 本地 Markdown | 是（文件正文） | `## Comments` 段按空行分段     | 否       | 否     | 否                              | 否     | 否                                                         | 否（不改用户手写的文件）                                           |
+| Backend | Detail body | Comments | Link URL | Label write | Assignee write | Status write | Completion candidates | Delete |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| GitHub | Yes | GraphQL (comments page by `hasNextPage`, 100 per page) | Yes | Yes | Yes | Yes | `gh label list`; `gh api .../assignees --paginate --slurp` | `gh issue delete --yes`; `viewerPermission` is `ADMIN` |
+| GitLab | Yes | notes API (system notes skipped) | Yes | Yes | Yes (full replacement; prefix `!` to clear) | Yes | labels and members/all paging (only active members kept) | `glab api --method DELETE`; Owner (access_level ≥ 50) or instance admin |
+| Gitea | Yes | comments API | Yes | Yes | Yes (`--set-assignees`) | Yes | labels paging (50 per page) and assignees | `tea api --method DELETE`; `permissions.admin` |
+| Local Markdown | Yes (file body) | `## Comments` sections split by blank lines | No | No | No | No | No | No (never rewrites files the user wrote) |
 
-- 列表分页：GitHub 一次取一页（GraphQL 的 `first` 上限 100），返回 `nextCursor`，
-  宿主用 `snapshot.loadMore` 按游标追加；GitLab、Gitea 与本地 Markdown 一次取全，没有 `nextCursor`。
-  增量刷新保留已追加的窗口与游标（合并结果不裁剪）；「全量刷新」或「只加载了一部分却没有游标」的
-  旧缓存才回到第一页。
-- 列表里的人员信息：每张票带分配人登录名（`assignees`），快照带当前登录用户（`viewer`）。
-  GitHub 在同一次 GraphQL 查询里取 `viewer.login` 与 `assignees(first: 10)`；GitLab / Gitea 的
-  列表响应自带分配人，另发一次 `glab api user` / `tea api /user` 查身份，与列表并行发出。
-  身份查询失败只让 `viewer` 为 null，不影响列表；本地 Markdown 的 `viewer` 为 null、分配人为空数组。
-  分配人只存登录名，不读展示名与头像。
-- 父子能力由每个后端显式声明：GitHub 从列表查询一并取 `parent`（同仓库存 `#编号`，跨仓库存
-  `owner/name#编号`）；GitLab 在列表返回后按每批 100 个 iid 查工作项层级（issue / task 父级存
-  `#iid`，epic 存 `&iid`，失败只降级能力、不影响列表）；本地 Markdown 解析同一 feature 内的
-  `Parent:` 行；Gitea 声明为无。共用契约套件会断言能力声明与父级引用一致，声明为无的后端
-  不得出现 `parent`。
-- 详情只在打开详情时请求，不进入列表快照；创建人、评论作者与分配人都是结构化用户
-  （登录名 / 展示名 / 头像地址），与列表的创建人同源同形：GitHub 的 `author.login` + `avatarUrl`、
-  GitLab 的 `username` + `avatar_url`、Gitea 的 `login` + `avatar_url`（相对地址按实例基准补全）；
-  本地 Markdown 没有远端用户，创建人与评论作者为 null、分配人为空数组。
-  GitHub 详情整条走 GraphQL，一次取全作者、分配人与评论作者的头像；变更前的当前值也只读一次。
-- GitLab 详情返回前会把正文与评论里的上传附件内联成 `data:image/`：只认当前项目
-  `/uploads/<secret>/<filename>` 的相对地址与同源同项目路径的绝对地址，用已登录的
-  `glab api projects/<id>/uploads/<secret>/<filename>` 取原始字节；取图失败、非位图或超过
-  大小上限时降级成指向 GitLab 原链接的普通链接。token 只留在 `glab` 进程里，不进协议字段。
-- 补全候选把标签颜色统一成小写 `#rrggbb`，重复的标签名 / 用户名只保留第一次出现的项；
-- 删除前宿主会再查一次权限；删除成功后不可撤销，编号不存在映射为 `ticket-not-found`；
-- 权限查询失败在宿主按“没有权限”处理，详情仍然正常返回，只把删除能力置为 false；
-- 变更补丁表达目标集合，适配器用 `core` 的 `planSetChange` 与当前值算成各自 CLI 的增删参数；
-  「分配给我」由适配器解析当前登录用户（GitHub 用 `@me`，GitLab / Gitea 先查 `/user`）；
-- 本地 Markdown 的引用必须是 `.scratch/<feature>/issues/<name>.md`，越界路径直接拒绝读取。
-- 可选字段：能给出关闭时间时填 `closedAt`；能给出阻塞依赖边时填 `blockedBy`（引用集合，不论开闭）。
-  GitHub 列表查询只给未关闭阻塞数，整张票省略 `blockedBy`；本地 Markdown 没有关闭时间。
+- List pagination: GitHub fetches one page at a time (GraphQL `first` is capped at 100) and returns
+  `nextCursor`; the host appends by cursor with `snapshot.loadMore`. GitLab, Gitea and local Markdown
+  fetch everything at once and have no `nextCursor`. Incremental refreshes keep the appended window
+  and cursor (the merged result is not trimmed); only a full refresh, or an old cache that loaded
+  only part of the list without a cursor, goes back to the first page.
+- People in the list: every ticket carries assignee logins (`assignees`), and the snapshot carries the
+  signed-in user (`viewer`). GitHub fetches `viewer.login` and `assignees(first: 10)` in the same
+  GraphQL query; GitLab / Gitea list responses already carry assignees, plus one `glab api user` /
+  `tea api /user` identity lookup sent in parallel with the list. A failed identity lookup only makes
+  `viewer` null and does not affect the list; local Markdown has a null `viewer` and empty assignee
+  arrays. Assignees are stored as logins only; display names and avatars are not read.
+- Each backend declares its hierarchy capability explicitly: GitHub fetches `parent` with the list
+  query (`#number` in the same repository, `owner/name#number` across repositories); GitLab queries
+  the work-item hierarchy after the list returns, in batches of 100 iids (issue / task parents stored
+  as `#iid`, epics as `&iid`; a failure only downgrades the capability and does not affect the list);
+  local Markdown parses `Parent:` lines within the same feature; Gitea declares none. The shared
+  contract suite asserts that the declared capability and parent references agree, and a backend that
+  declares none must not emit `parent`.
+- Details are requested only when a detail is opened and never enter the list snapshot. Creators,
+  comment authors and assignees are structured users (login / display name / avatar URL), with the
+  same shape and source as the list creator: GitHub's `author.login` + `avatarUrl`, GitLab's
+  `username` + `avatar_url`, Gitea's `login` + `avatar_url` (relative paths completed against the
+  instance base). Local Markdown has no remote users: creator and comment authors are null and
+  assignees are an empty array. GitHub details go entirely through GraphQL and fetch avatars for the
+  creator, assignees and comment authors in one request; current values before a change are also read
+  only once.
+- Before returning a GitLab detail, uploaded attachments in the body and comments are inlined as
+  `data:image/`: only relative `/uploads/<secret>/<filename>` URLs of the current project and
+  same-origin absolute URLs with the same project path are recognized, and the raw bytes are fetched
+  with the signed-in `glab api projects/<id>/uploads/<secret>/<filename>`. If fetching fails, the file
+  is not a raster image or it exceeds the size limit, it degrades to a plain link to the original
+  GitLab URL. The token stays inside the `glab` process and never enters protocol fields.
+- Completion candidates lowercase label colors to `#rrggbb` and keep only the first occurrence of a
+  duplicate label name or username.
+- The host checks permissions again before deletion. Deletion is irreversible, and a missing number
+  maps to `ticket-not-found`.
+- A failed permission query is treated as "no permission" by the host; details still return normally
+  and only the delete capability is set to false.
+- Change patches describe target sets; adapters use core's `planSetChange` with the current values to
+  produce each CLI's add/remove arguments. "Assign to me" resolves the logged-in user in the adapter
+  (GitHub uses `@me`; GitLab / Gitea query `/user` first).
+- Local Markdown references must be `.scratch/<feature>/issues/<name>.md`; paths outside that shape
+  are refused.
+- Optional fields: fill `closedAt` when a close time is available, and `blockedBy` (a reference set,
+  open or closed) when blocking dependency edges are available. GitHub list queries only provide the
+  number of open blockers, so a whole ticket omits `blockedBy`; local Markdown has no close time.
 
-- 只能依赖 `core`；各个后端之间互不依赖（由 `adapters-only-core` 规则检查）；
-- 工单后端共用一套契约测试：同一组用例，每个后端都必须跑通；测试里不连真实服务，用录制好的响应或内存假实现。
-  详情、补全候选与删除能力也在这套契约里：实现该能力的后端给出请求与期望输出，省略即表示不实现。
+- Adapters may depend only on `core`; backends never depend on each other (a convention, not a
+  tool-enforced rule).
+- All ticket backends share one contract test suite: the same cases must pass for every backend.
+  Tests never connect to a real service; they use recorded responses or in-memory fakes. Detail,
+  completion-candidate and delete capabilities are part of the contract too: a backend that
+  implements one provides the request and expected output, and omitting it means the capability is
+  not implemented.
