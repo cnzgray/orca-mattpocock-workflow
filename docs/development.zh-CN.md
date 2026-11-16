@@ -245,7 +245,7 @@ orca plugin install cnzgray/orca-mattpocock-workflow@vX.Y.Z
 - `main` 同时是默认分支：无版本安装读到的是这次提交，固定版本用 `vX.Y.Z`。
 - 仓库公开并带 `orca-plugin` topic；私有仓库只能按 Git URL 安装，不会进目录。
 
-本仓库当前是私有仓库：Git URL 安装可用，目录收录要等维护者决定公开之后。
+本仓库已公开（自 `v0.1.0` 起），社区目录按上面的条件自动收录。
 
 ### 常见拒绝原因
 

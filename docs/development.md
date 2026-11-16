@@ -271,8 +271,8 @@ orca plugin install cnzgray/orca-mattpocock-workflow@vX.Y.Z
 - The repository is public and carries the `orca-plugin` topic; a private repository can only be
   installed by Git URL and is never listed.
 
-This repository is currently private: Git URL installation works, and catalog listing waits for the
-maintainer to make it public.
+This repository is public (since `v0.1.0`), so the community catalog lists it automatically under the
+conditions above.
 
 ### Common rejection reasons
 
