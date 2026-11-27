@@ -279,6 +279,7 @@ function matchByTerminalTitle(
   titles: readonly string[],
 ): WorkspaceCandidate | undefined {
   for (const title of titles) {
+    const comparableTitle = comparablePath(title)
     // 每个工作区取它在标题里最长的一次完整命中；同名前缀的兄弟仓库
     // （`~/x/orca` 对 `~/x/orca-workflow`）不算命中。
     const hits: { readonly workspace: WorkspaceCandidate; readonly length: number }[] = []
@@ -286,7 +287,7 @@ function matchByTerminalTitle(
       const length = Math.max(
         0,
         ...pathForms(workspace.path)
-          .filter((form) => containsPath(title, form))
+          .filter((form) => containsPath(comparableTitle, form))
           .map((form) => form.length),
       )
       if (length > 0) hits.push({ workspace, length })
@@ -332,12 +333,18 @@ function containsPath(title: string, path: string): boolean {
  * @returns 可比较的路径写法。
  */
 function pathForms(path: string): readonly string[] {
-  const home = homedir()
-  const forms = [path]
-  if (home.length > 0 && path.startsWith(home)) {
-    forms.push(`~${path.slice(home.length)}`)
+  const home = comparablePath(homedir())
+  const comparable = comparablePath(path)
+  const forms = [comparable]
+  if (home.length > 0 && comparable.startsWith(`${home}/`)) {
+    forms.push(`~${comparable.slice(home.length)}`)
   }
   return forms
+}
+
+/** Git Bash and Windows shells can display the same Windows path differently. */
+function comparablePath(path: string): string {
+  return process.platform === 'win32' ? path.replaceAll('\\', '/').toLowerCase() : path
 }
 
 /** 在全部工作区里认领当前工作区。 */

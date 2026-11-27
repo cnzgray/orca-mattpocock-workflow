@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { basename, dirname } from 'node:path'
+import { describe, expect, it, vi } from 'vitest'
 
 import { CommandError } from '../core/tracker-error.ts'
 import { createCommandRunner } from './subprocess-runner.ts'
@@ -49,13 +50,24 @@ describe('命令执行器', () => {
     expect(error instanceof CommandError && error.kind).toBe('timeout')
   })
 
+  it.skipIf(process.platform !== 'win32')('resolves native Windows executable names through PATH', async () => {
+    vi.stubEnv('PATH', dirname(process.execPath))
+    try {
+      const output = await createCommandRunner()(basename(process.execPath, '.exe'), ['--version'])
+      expect(output.executable).toBe(process.execPath)
+      expect(output.stdout.trim()).toBe(process.version)
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
   it('在指定目录里执行命令', async () => {
     const run = createCommandRunner()
 
     const output = await run(process.execPath, ['-e', 'process.stdout.write(process.cwd())'], {
-      cwd: '/tmp',
+      cwd: dirname(process.execPath),
     })
 
-    expect(output.stdout).toContain('tmp')
+    expect(output.stdout).toBe(dirname(process.execPath))
   })
 })

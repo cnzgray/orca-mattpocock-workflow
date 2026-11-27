@@ -7,7 +7,7 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { access, stat } from 'node:fs/promises'
 import { constants } from 'node:fs'
-import { delimiter, join } from 'node:path'
+import { delimiter, extname, join } from 'node:path'
 
 import type {
   BinaryCommandRunner,
@@ -117,20 +117,28 @@ export async function resolveExecutable(command: string): Promise<string> {
 
 /** 一个命令要尝试的候选：命令本身，加上 Homebrew 兜底路径。 */
 function candidatesOf(command: string): readonly string[] {
-  if (command.includes('/')) return [command]
+  if (isCommandPath(command)) return [command]
   return [command, ...(EXECUTABLE_FALLBACKS[command] ?? [])]
 }
 
 /** 在 PATH 或绝对路径上找一个可执行文件。 */
 async function lookup(candidate: string): Promise<string | undefined> {
-  if (candidate.includes('/')) {
-    return (await isExecutable(candidate)) ? candidate : undefined
+  // Spawn Windows native binaries directly instead of invoking a shell for batch shims.
+  const executable = process.platform === 'win32' && extname(candidate) === ''
+    ? `${candidate}.exe`
+    : candidate
+  if (isCommandPath(executable)) {
+    return (await isExecutable(executable)) ? executable : undefined
   }
   for (const directory of pathDirectories()) {
-    const full = join(directory, candidate)
+    const full = join(directory, executable)
     if (await isExecutable(full)) return full
   }
   return undefined
+}
+
+function isCommandPath(command: string): boolean {
+  return command.includes('/') || (process.platform === 'win32' && command.includes('\\'))
 }
 
 /** PATH 里的目录；空项忽略。 */

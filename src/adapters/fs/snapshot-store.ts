@@ -224,7 +224,7 @@ function entryOperations(
 
     async remove(key) {
       const root = await resolveRoot()
-      await rm(directoryFor(root, key), { recursive: true, force: true })
+      await rm(directoryFor(root, key), { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
       await rm(legacyFileFor(root, key), { force: true })
     },
 
@@ -241,7 +241,7 @@ function entryOperations(
       let removed = 0
       for (const name of names) {
         if (!isEntryDirectory(name) && !isLegacyFile(name)) continue
-        await rm(join(root, name), { recursive: true, force: true })
+        await rm(join(root, name), { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
         removed += 1
       }
       return removed
@@ -255,7 +255,7 @@ function entryOperations(
       for (const scanned of await scanEntryDirectories(root)) {
         // 版本不符或内容损坏：整份目录读不回来，直接清掉，不影响其它工作区。
         if (scanned.entry === undefined) {
-          await rm(scanned.path, { recursive: true, force: true })
+          await rm(scanned.path, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
           removed += 1
           continue
         }
@@ -265,7 +265,7 @@ function entryOperations(
         // 目录确实不存在，或目录还在但超过保留期：删。
         // 路径暂时不可达（gone === false）时不删：挂载点掉线不该把缓存清掉。
         if (gone === true || (gone === undefined && now - entry.fetchedAt > SNAPSHOT_STORE_TTL_MS)) {
-          await rm(scanned.path, { recursive: true, force: true })
+          await rm(scanned.path, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
           removed += 1
           continue
         }
@@ -280,7 +280,7 @@ function entryOperations(
         for (const entry of kept.slice(0, kept.length - SNAPSHOT_STORE_MAX_ENTRIES)) {
           await rm(
             directoryFor(root, storeKeyOf(entry.backend, entry.scopeRoot, entry.workspaceRoot)),
-            { recursive: true, force: true },
+            { recursive: true, force: true, maxRetries: 10, retryDelay: 50 },
           )
           removed += 1
         }

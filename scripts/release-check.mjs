@@ -29,7 +29,7 @@ try {
   console.error(`发布检查失败：${error instanceof Error ? error.message : String(error)}`)
   process.exitCode = 1
 } finally {
-  await rm(tempRoot, { recursive: true, force: true })
+  await rm(tempRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
 }
 
 async function main() {
@@ -40,7 +40,8 @@ async function main() {
   await mkdir(exportDir)
   const archivePath = join(tempRoot, 'head.tar')
   git(['archive', `--output=${archivePath}`, '--format=tar', 'HEAD'])
-  run('tar', ['-xf', archivePath, '-C', exportDir])
+  // 相对路径 + cwd：绝对 Windows 路径（C:\…）里的冒号会被 GNU tar 当成远端主机。
+  run('tar', ['-xf', 'head.tar', '-C', 'tree'], { cwd: tempRoot })
 
   const tree = await readTree(exportDir)
   const gitEntries = readGitEntries()
@@ -315,9 +316,9 @@ function readReleaseEntry(orca) {
  * @param {string} command
  * @param {string[]} args
  */
-function run(command, args) {
+function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
-    cwd: repoRoot,
+    cwd: options.cwd ?? repoRoot,
     encoding: 'utf8',
     maxBuffer: MAX_BUFFER,
   })

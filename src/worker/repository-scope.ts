@@ -10,6 +10,7 @@
  * 不能每次都跑一条 git 命令。失败不缓存，下一次请求重新解析。
  */
 import { stat } from 'node:fs/promises'
+import { normalize } from 'node:path'
 
 import { parseWorktreeRoots, pickExistingRoot } from '../core/repository-scope.ts'
 import type { CommandRunner } from '../core/ticket.ts'
@@ -68,7 +69,7 @@ async function resolveScope(
     const output = await deps.run('git', ['worktree', 'list', '--porcelain'], {
       cwd: workspaceRoot,
     })
-    return await pickExistingRoot(parseWorktreeRoots(output.stdout), exists)
+    return await pickExistingRoot(parseWorktreeRoots(output.stdout).map(normalize), exists)
   } catch {
     // 不是 git 仓库、没装 git、输出不可解析：交给调用方退回工作区。
     return undefined

@@ -24,7 +24,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  await rm(root, { recursive: true, force: true })
+  await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
 })
 
 function ticket(number: number, overrides: Partial<Ticket> = {}): Ticket {
@@ -217,7 +217,7 @@ describe('本地快照库的目录实现', () => {
     await expect(cache.changesSince(key(), 0)).resolves.toBeUndefined()
     const current = await cache.revision(key())
     await expect(cache.changesSince(key(), (current ?? 1) - 1)).resolves.toBeDefined()
-  })
+  }, 20_000)
 
   it('清空后条目全部消失并返回清掉的数量', async () => {
     const cache = store()

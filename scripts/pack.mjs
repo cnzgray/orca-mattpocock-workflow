@@ -11,7 +11,7 @@ import { join, relative, resolve } from 'node:path'
 const rootDir = resolve(import.meta.dirname, '..')
 const outDir = resolve(rootDir, '.orca/plugin-package')
 const CONTENT = ['dist', 'skills']
-const FILES = ['orca-plugin.json', 'README.md']
+const FILES = ['orca-plugin.json', 'README.md', 'LICENSE']
 const MAX_ENTRIES = 2000
 const MAX_BYTES = 50 * 1024 * 1024
 

@@ -506,7 +506,7 @@ function entryOperations(resolveRoot, onCommitStage) {
     },
     async remove(key) {
       const root = await resolveRoot();
-      await rm(directoryFor(root, key), { recursive: true, force: true });
+      await rm(directoryFor(root, key), { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
       await rm(legacyFileFor(root, key), { force: true });
     },
     list,
@@ -521,7 +521,7 @@ function entryOperations(resolveRoot, onCommitStage) {
       let removed = 0;
       for (const name of names) {
         if (!isEntryDirectory(name) && !isLegacyFile(name)) continue;
-        await rm(join(root, name), { recursive: true, force: true });
+        await rm(join(root, name), { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
         removed += 1;
       }
       return removed;
@@ -532,7 +532,7 @@ function entryOperations(resolveRoot, onCommitStage) {
       let removed = 0;
       for (const scanned of await scanEntryDirectories(root)) {
         if (scanned.entry === void 0) {
-          await rm(scanned.path, { recursive: true, force: true });
+          await rm(scanned.path, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
           removed += 1;
           continue;
         }
@@ -540,7 +540,7 @@ function entryOperations(resolveRoot, onCommitStage) {
         const key = storeKeyOf(entry.backend, entry.scopeRoot, entry.workspaceRoot);
         const gone = await isDirectoryGone(key);
         if (gone === true || gone === void 0 && now - entry.fetchedAt > SNAPSHOT_STORE_TTL_MS) {
-          await rm(scanned.path, { recursive: true, force: true });
+          await rm(scanned.path, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
           removed += 1;
           continue;
         }
@@ -552,7 +552,7 @@ function entryOperations(resolveRoot, onCommitStage) {
         for (const entry of kept.slice(0, kept.length - SNAPSHOT_STORE_MAX_ENTRIES)) {
           await rm(
             directoryFor(root, storeKeyOf(entry.backend, entry.scopeRoot, entry.workspaceRoot)),
-            { recursive: true, force: true }
+            { recursive: true, force: true, maxRetries: 10, retryDelay: 50 }
           );
           removed += 1;
         }
@@ -5095,7 +5095,7 @@ async function resolveOrcaCli(run, options = {}) {
 import { spawn } from "node:child_process";
 import { access as access2, stat as stat4 } from "node:fs/promises";
 import { constants as constants2 } from "node:fs";
-import { delimiter, join as join2 } from "node:path";
+import { delimiter, extname, join as join2 } from "node:path";
 var STDOUT_LIMIT_BYTES = 8 * 1024 * 1024;
 var STDERR_LIMIT_BYTES = 256 * 1024;
 var COMMAND_TIMEOUT_MS = 3e4;
@@ -5147,18 +5147,22 @@ async function resolveExecutable(command) {
   throw new CommandError("not-found", `\u627E\u4E0D\u5230\u53EF\u6267\u884C\u6587\u4EF6\uFF1A${command}`, "", null);
 }
 function candidatesOf(command) {
-  if (command.includes("/")) return [command];
+  if (isCommandPath(command)) return [command];
   return [command, ...EXECUTABLE_FALLBACKS[command] ?? []];
 }
 async function lookup(candidate) {
-  if (candidate.includes("/")) {
-    return await isExecutable(candidate) ? candidate : void 0;
+  const executable = process.platform === "win32" && extname(candidate) === "" ? `${candidate}.exe` : candidate;
+  if (isCommandPath(executable)) {
+    return await isExecutable(executable) ? executable : void 0;
   }
   for (const directory of pathDirectories()) {
-    const full = join2(directory, candidate);
+    const full = join2(directory, executable);
     if (await isExecutable(full)) return full;
   }
   return void 0;
+}
+function isCommandPath(command) {
+  return command.includes("/") || process.platform === "win32" && command.includes("\\");
 }
 function pathDirectories() {
   const raw = process.env["PATH"] ?? "";
@@ -6044,6 +6048,7 @@ function createProbeDeadline(timer, timeoutMs) {
 
 // src/worker/repository-scope.ts
 import { stat as stat5 } from "node:fs/promises";
+import { normalize } from "node:path";
 function createRepositoryScopeResolver(deps) {
   const exists = deps.exists ?? directoryExists;
   const cache = /* @__PURE__ */ new Map();
@@ -6066,7 +6071,7 @@ async function resolveScope(deps, exists, workspaceRoot) {
     const output = await deps.run("git", ["worktree", "list", "--porcelain"], {
       cwd: workspaceRoot
     });
-    return await pickExistingRoot(parseWorktreeRoots(output.stdout), exists);
+    return await pickExistingRoot(parseWorktreeRoots(output.stdout).map(normalize), exists);
   } catch {
     return void 0;
   }
@@ -8577,11 +8582,12 @@ function matchByName(workspaces, displayName) {
 }
 function matchByTerminalTitle(workspaces, titles) {
   for (const title of titles) {
+    const comparableTitle = comparablePath(title);
     const hits = [];
     for (const workspace of workspaces) {
       const length = Math.max(
         0,
-        ...pathForms(workspace.path).filter((form) => containsPath(title, form)).map((form) => form.length)
+        ...pathForms(workspace.path).filter((form) => containsPath(comparableTitle, form)).map((form) => form.length)
       );
       if (length > 0) hits.push({ workspace, length });
     }
@@ -8607,12 +8613,16 @@ function containsPath(title, path) {
   }
 }
 function pathForms(path) {
-  const home = homedir5();
-  const forms = [path];
-  if (home.length > 0 && path.startsWith(home)) {
-    forms.push(`~${path.slice(home.length)}`);
+  const home = comparablePath(homedir5());
+  const comparable = comparablePath(path);
+  const forms = [comparable];
+  if (home.length > 0 && comparable.startsWith(`${home}/`)) {
+    forms.push(`~${comparable.slice(home.length)}`);
   }
   return forms;
+}
+function comparablePath(path) {
+  return process.platform === "win32" ? path.replaceAll("\\", "/").toLowerCase() : path;
 }
 async function matchWorkspace(host, context, preferred) {
   const key = contextKeyOf(context);
