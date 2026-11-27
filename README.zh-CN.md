@@ -180,7 +180,7 @@ orca plugin install .orca/plugin-package   # 首次按提示带 --approve <指�
 发布前给发布提交打附注标签，再跑唯一的闸门（检查针对 HEAD，没有标签会直接失败）：
 
 ```bash
-git tag -a v0.6.1 -m v0.6.1
+git tag -a v0.6.2 -m v0.6.2
 pnpm release:check
 ```
 
@@ -191,13 +191,13 @@ pnpm release:check
 通过后推送提交与标签：
 
 ```bash
-git push origin HEAD v0.6.1
+git push origin HEAD v0.6.2
 ```
 
 使用者按版本安装：
 
 ```bash
-orca plugin install cnzgray/orca-mattpocock-workflow@v0.6.1
+orca plugin install cnzgray/orca-mattpocock-workflow@v0.6.2
 ```
 
 首次安装会要求批准一次，批准页列出能力与贡献点；新增能力、命令、面板、事件订阅或抬高执行档位

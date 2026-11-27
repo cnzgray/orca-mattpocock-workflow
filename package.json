@@ -1,6 +1,6 @@
 {
   "name": "orca-mattpocock-workflow",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "private": true,
   "type": "module",
   "description": "Orca 插件：在右侧栏运行 mattpocock/skills 工作流面板",
