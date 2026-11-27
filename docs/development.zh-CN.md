@@ -174,6 +174,22 @@ orca plugin dev unload .        # 摘掉开发目录
 
 卸载不需要审批；同 key 的已安装插件会回来，并按它自己的权限重新要求审批。
 
+## 分支与合并
+
+`main` 是主干。从 `main` 切短命分支 `<bugfix|feat>/<ticket>[-<slug>]`，合入时保持线性：
+
+```bash
+git switch main && git pull --ff-only
+git switch bugfix/12-gitlab
+git rebase main
+git switch main && git merge --ff-only bugfix/12-gitlab
+git branch -d bugfix/12-gitlab
+```
+
+不用合并提交（`git merge --no-ff` 或 GitHub 的 "Create a merge commit"）：它把 `main` 分成两条线，
+`git log --oneline`、`git bisect` 与提交计数都不再和发布序列对应。本地设置 `merge.ff=only` 与
+`pull.rebase=true` 兜底；PR 在 GitHub 上用 squash 或 rebase 合并。
+
 ## 发布
 
 开发目录加载不是分发形态。发布走 Git 树：目录站与 `orca plugin install` 看到的都是版本标签指向的

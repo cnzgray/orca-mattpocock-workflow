@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { installPoolSkills } from './skill-installer.ts'
+import { createWorkflowSkills, renderSkillFile } from './workflow-skills.ts'
 
 let target = ''
 
@@ -25,9 +26,10 @@ describe('入池技能安装', () => {
       'mattwf-bug',
       'mattwf-feature',
     ])
-    const bug = await readFile(join(target, 'mattwf-bug', 'SKILL.md'), 'utf8')
-    expect(bug).toContain('name: mattwf-bug')
-    expect(bug).toContain('只建票')
+    for (const skill of createWorkflowSkills()) {
+      const copied = await readFile(join(target, skill.name, 'SKILL.md'), 'utf8')
+      expect(copied).toBe(renderSkillFile(skill))
+    }
   })
 
   it('目标目录写不进去时报告失败而不是抛错', async () => {

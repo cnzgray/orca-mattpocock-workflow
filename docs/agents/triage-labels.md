@@ -1,33 +1,29 @@
-# Triage 标签
+# Triage labels
 
-Triage 按**角色**说话，这张表把角色映射到本仓库工单后端里真实使用的标签字符串。
-两类角色都要覆盖：五个**状态角色**（一张票在 triage 状态机里的位置），和两个**分类角色**
-（每张 triaged 的票恰好带一个）。
+Triage speaks in **roles**; this table maps each role to the label string actually used in this repository's ticket backend. Two kinds of role must both be covered: five **state roles** (where a ticket sits in the triage state machine) and two **class roles** (every triaged ticket carries exactly one).
 
-| 规范角色                   | 本仓库的标签          | 含义                       |
-| -------------------------- | --------------------- | -------------------------- |
-| `needs-triage`             | `needs-triage`        | 维护者需要先评估、定性     |
-| `needs-info`               | `needs-info`          | 等待报告人补充信息         |
-| `ready-for-agent`          | `ready-for-agent`     | 规格完整，可直接交给 agent |
-| `ready-for-human`          | `ready-for-human`     | 需要人工实现               |
-| `wontfix`                  | `wontfix`             | 决定不做                   |
+| Canonical role   | Label in this repository | Meaning                                      |
+| ---------------- | ------------------------ | -------------------------------------------- |
+| `needs-triage`   | `needs-triage`           | A maintainer must assess and classify it      |
+| `needs-info`     | `needs-info`             | Waiting for the reporter to supply details    |
+| `ready-for-agent`| `ready-for-agent`        | Spec is complete; hand it straight to an agent |
+| `ready-for-human`| `ready-for-human`        | Needs a human implementation                  |
+| `wontfix`        | `wontfix`                | Decided against                               |
 
-| 规范角色                   | 本仓库的标签          | 含义                               |
-| -------------------------- | --------------------- | ---------------------------------- |
-| `bug`                      | `bug`                 | 分类角色，每张 triaged 票恰好一个  |
-| `enhancement`              | `enhancement`         | 分类角色，每张 triaged 票恰好一个  |
+| Canonical role | Label in this repository | Meaning                                      |
+| -------------- | ------------------------ | -------------------------------------------- |
+| `bug`          | `bug`                    | Class role; every triaged ticket has exactly one |
+| `enhancement`  | `enhancement`            | Class role; every triaged ticket has exactly one |
 
-提到某个角色时（例如「打上可交给 agent 的 triage 标签」），就取表里对应的标签字符串，不要另造名字。
+When a role is mentioned (for example "apply the triage label that makes it agent-ready"), take the matching label string from the table; do not invent a name.
 
-## 与代码的一致性
+## Consistency with code
 
-这些字符串是产品契约，不是随手写的文档：
+These strings are a product contract, not incidental documentation:
 
-- `src/protocol/labels.ts` 的 `TRACKER_LABELS` 持有同一组名字，宿主与面板都按它判定；
-- GitHub 上必须存在同名标签，`to-tickets` 发布会直接 `--add-label`。
+- `TRACKER_LABELS` in `src/protocol/labels.ts` holds the same names, and both host and panel judge by it;
+- The same labels must exist on GitHub; `to-tickets` publishing calls `--add-label` directly.
 
-三处（本表、`labels.ts`、GitHub labels）必须同时改。改完跑 `pnpm typecheck && pnpm test`，
-`src/core` 与 `src/adapters/*` 的判定用例会暴露漏改的地方。
+All three (this table, `labels.ts`, GitHub labels) must change together. Then run `pnpm typecheck && pnpm test`: the verdict cases in `src/core` and `src/adapters/*` expose anything missed.
 
-本仓库沿用默认名，所以「Label in our tracker」一列暂不需要覆盖值；若将来后端改用
-`bug:triage` 这类既有命名，只改中间一列，其余文档不必动。
+This repository keeps the default names, so the "Label in this repository" column needs no override value yet; if a backend later adopts an existing scheme such as `bug:triage`, change only the middle column — no other document needs to move.

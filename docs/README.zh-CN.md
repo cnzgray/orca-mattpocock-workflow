@@ -7,9 +7,9 @@
 - **公开文档**同时维护英文与简体中文。英文文件占规范路径（`README.md`、`docs/development.md`、
   `GLOSSARY.md`、`src/*/README.md`），中文译文放在同目录的 `*.zh-CN.md`。每一对文件开头都有语言切换链接；
   改内容时在同一个 PR 里同时更新两份。
-- **代理运行文档**（`AGENTS.md`、`CLAUDE.md`、`docs/agents/*.md`）保持简体中文：它们配置本仓库的
-  中文代理工作流，不属于面向用户的文档。
-- **技能正文**（`skills/*/SKILL.md`）保持简体中文：它们是提示词内容，不是界面文案，不跟随面板语言设置。
+- **代理运行文档**（`AGENTS.md`、`CLAUDE.md`、`docs/agents/*.md`）只用英文，不配 `*.zh-CN.md` 译文：
+  它们配置代理工作流，不属于面向用户的文档。
+- **技能正文**（`skills/*/SKILL.md`）只用英文：它们是提示词内容，不是界面文案，不跟随面板语言设置。
 - **面板界面**通过 `language` 插件设置（`auto` / `zh-CN` / `en`）在运行时切换语言。
   消息目录在 `src/protocol/i18n.ts`；`src/panel/i18n-guard.test.ts` 拦住面板组件里的中文字面量。
 - **插件清单字符串**（`orca-plugin.json` 的描述与命令标题）用英文：Orca 清单 schema 没有按语言
@@ -29,7 +29,7 @@
 | 快照库决策 | [ADR 0001](adr/0001-directory-snapshot-library.md) | [ADR 0001](adr/0001-directory-snapshot-library.zh-CN.md) |
 | 技能 | [skills](../skills/README.md) | [skills](../skills/README.zh-CN.md) |
 
-代理运行文档（只有中文）：
+代理运行文档（只有英文）：
 
 - [工单后端与 spec 流程](agents/issue-tracker.md)
 - [Triage 标签](agents/triage-labels.md)

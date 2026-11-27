@@ -17,8 +17,8 @@ import {
 import { MESSAGES, type MessageId } from '../protocol/i18n.ts'
 import { TRACKER_LABELS, type TrackerLabelNames } from '../protocol/labels.ts'
 
-/** 技能正文固定用中文目录：技能是给 agent 读的规约，不随界面语言变化。 */
-const ZH = MESSAGES['zh-CN']
+/** 技能正文用英文目录渲染：技能是给 agent 读的规约，不随界面语言变化。 */
+const EN = MESSAGES['en']
 
 /** 一个入池技能的定义。 */
 export interface WorkflowSkillDefinition {
@@ -97,49 +97,49 @@ function createWorkflowSkill(
   const command = FLOW_COMMANDS[intake.command]
   return {
     name: command.name,
-    description: ZH[intake.descriptionKey],
+    description: EN[intake.descriptionKey],
     content: intakeContent(intake, labels),
   }
 }
 
 function intakeContent(intake: IntakeCommandDefinition, labels: TrackerLabelNames): string {
   const copy = INTAKE_COPY[intake.kind]
-  const labelList = intake.labelRoles.map((role) => labels[role]).join('、')
+  const labelList = intake.labelRoles.map((role) => labels[role]).join(', ')
 
   return [
-    ZH[copy.intro],
+    EN[copy.intro],
     '',
-    '## 先读',
-    '- 仓库里的领域术语表，用项目自己的词写标题和正文。',
-    '- 仓库里由 setup 技能生成的 issue 跟踪方式与 triage 标签映射文档，确认这次用哪个跟踪器、怎么建票、标签怎么写。',
+    '## Read first',
+    "- The repository's domain glossary: write the title and body in the project's own words.",
+    '- The issue-tracker and triage-label docs the setup skill generated in this repository: confirm which tracker is in use, how to file a ticket, and how labels are written.',
     '',
-    '## 边界',
-    '- 不翻代码、不复现、不定位根因；不自行拆票、不建父票、不声明阻塞关系。',
-    '- 用户明确说了拆成多张、或者合成一张时，就直接照做。',
-    '- 用户给的槽位只是引导。没填的槽位视为缺信息，不要把槽位原文或空标题写进票里。',
-    `- 缺硬信息（${ZH[copy.hardInfo]}）时，你自己判断要不要追问：够用就直接建票，不够就先问，最多问两三个问题。`,
-    '- 建票前先查一遍跟踪器里疑似重复的开放票；查到就停下来，把候选票给用户确认。',
-    '- 用户一次说了几件事、又没讲清要拆还是合时，先问用户。',
-    '- 标题和正文跟随仓库里已有工单的语言惯例。',
+    '## Boundaries',
+    '- Do not read code, reproduce, or locate a root cause; do not split the ticket, create a parent ticket, or declare blocking relations on your own.',
+    '- When the user explicitly says to split into several tickets or merge into one, do exactly that.',
+    '- Slots the user provided are scaffolding only. Treat an unfilled slot as missing information; never put the slot text or an empty title into the ticket.',
+    `- When hard information is missing (${EN[copy.hardInfo]}), decide yourself whether to ask: file the ticket when it is enough, otherwise ask first, at most two or three questions.`,
+    '- Before filing, search the tracker for open tickets that look like duplicates; if you find any, stop and show the candidates to the user for confirmation.',
+    '- When the user mentions several things at once without saying whether to split or merge, ask first.',
+    '- Follow the language convention of the tickets already in the repository for title and body.',
     '',
-    '## 图片',
-    '- 用户贴的图能证明问题时，上传进票。',
-    '- 与票无关、或者能直接转写成文字的图，不要放进票。',
-    '- 图里可能含本机路径、账号、token 或私有数据时，先问用户要不要传。',
-    '- 当前跟踪器传不了图片时，用文字描述图片内容，并提醒用户手动补图。',
+    '## Images',
+    '- Upload an image the user pasted when it proves the problem.',
+    '- Do not put an image into the ticket when it is unrelated, or when it can be transcribed as text.',
+    '- When an image may contain local paths, accounts, tokens or private data, ask the user before uploading.',
+    '- When the current tracker cannot take images, describe the image in text and remind the user to add it manually.',
     '',
-    '## 建票',
-    '- 标题用一句话说清是什么。',
-    '- 正文按下面的结构组织；没有内容的小节整节删掉：',
-    ...copy.sections.map((section, index) => `  ${String(index + 1)}. ${ZH[section]}`),
-    '- 不写文件路径和行号。',
-    `- 打上这些标签：${labelList}。`,
-    '- 按上面读到的跟踪方式建票。',
+    '## Filing',
+    '- State what it is in one sentence as the title.',
+    '- Organize the body with the structure below; delete any section that has no content:',
+    ...copy.sections.map((section, index) => `  ${String(index + 1)}. ${EN[section]}`),
+    '- Do not write file paths or line numbers.',
+    `- Apply these labels: ${labelList}.`,
+    '- File the ticket the way the tracker docs read above describe.',
     '',
-    '## 建完之后',
-    '- 只输出票的链接和一行下一步建议，然后停下，不要开始处理。',
-    '- 建议写成一行：`<客户端手势><命令名> <票的引用> —— <一句理由>`，`<客户端手势>` 按用户当前客户端写（Claude Code 是 `/`，omp 是 `/skill:`，Codex 是 `$`）；远端后端用 #N，本地 Markdown 用文件路径。',
-    '- 只从下面的候选里选一个推荐，最多再给一个备选：',
+    '## After filing',
+    '- Output only the ticket link and one line of next-step suggestion, then stop; do not start working.',
+    '- Write the suggestion as one line: `<client gesture><command> <ticket reference> — <one-line reason>`, with `<client gesture>` matching the user\'s current client (Claude Code `/`, omp `/skill:`, Codex `$`); use #N for remote backends and a file path for local Markdown.',
+    '- Pick one recommendation from the candidates below, plus at most one alternative:',
     ...intake.nextSteps.map(nextStepLine),
   ].join('\n')
 }
@@ -147,7 +147,7 @@ function intakeContent(intake: IntakeCommandDefinition, labels: TrackerLabelName
 function nextStepLine(id: IntakeCommandDefinition['nextSteps'][number]): string {
   const step = NEXT_STEPS[id]
   const name = FLOW_COMMANDS[step.command].name
-  const reminder = step.reminderKey === null ? '' : `（${ZH[step.reminderKey]}）`
+  const reminder = step.reminderKey === null ? '' : ` (${EN[step.reminderKey]})`
   // 只写命令名：客户端手势由用户当前客户端决定，正文不替它选。
-  return `- ${name} ${ZH['flow.skill.ticketReference']} —— ${ZH[step.whenKey]}${reminder}`
+  return `- ${name} ${EN['flow.skill.ticketReference']} — ${EN[step.whenKey]}${reminder}`
 }

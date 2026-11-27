@@ -28,5 +28,5 @@ copied into several clients' skill directories, and installing it does not revea
 user runs. The prefix belongs to the user's client (Claude Code `/`, omp `/skill:`, Codex `$`); the
 body lists all three and lets the agent pick the one that fits.
 
-Skill bodies are always in Simplified Chinese: they are prompt content, not UI copy, and do not
-follow the panel's `language` setting.
+Skill bodies are always in English: they are prompt content, not UI copy, and do not follow the
+panel's `language` setting.

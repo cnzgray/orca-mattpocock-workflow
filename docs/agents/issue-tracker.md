@@ -1,49 +1,45 @@
-# 工单后端：GitHub
+# Ticket backend: GitHub
 
-本仓库的 issue 与 spec 都住在 GitHub Issues：`cnzgray/orca-mattpocock-workflow`（私有）。
-所有操作走 `gh` CLI；在克隆目录内运行时 `gh` 会自动推断仓库。
+This repository's issues and specs both live in GitHub Issues: `cnzgray/orca-mattpocock-workflow` (private).
+Every operation goes through the `gh` CLI; inside a clone, `gh` infers the repository automatically.
 
-## 约定
+## Conventions
 
-- **建票**：`gh issue create --title "..." --body "..."`。多行正文用 heredoc。
-- **读票**：`gh issue view <number> --json number,title,body,labels,comments`。
-- **列票**：`gh issue list --state open --json number,title,body,labels,comments --jq '[.[] | {number, title, body, labels: [.labels[].name], comments: [.comments[].body]}]'`，按需加 `--label` 与 `--state` 过滤。
-- **把一张票挂成子票**：`gh issue create --parent <parent> ...`，或事后 `gh issue edit <parent> --add-sub-issue <child>`（`gh` 2.94+）。旧版 `gh`：`gh api --method POST repos/<owner>/<repo>/issues/<parent>/sub_issues -F sub_issue_id=<child-db-id>`，其中 `<child-db-id>` 是子票的**数据库 id**（`gh api repos/<owner>/<repo>/issues/<n> --jq .id`），不是 `#number`，也不是 `node_id`。没有子票能力时，在子票正文顶部写 `Part of #<parent>`。
-- **阻塞关系**：用 GitHub 原生 issue dependency，这是唯一在 UI 可见的规范表示。加边：`gh issue create --blocked-by <n>,<n> ...` 或 `gh issue edit <child> --add-blocked-by <blocker>`（`gh` 2.94+）。旧版 `gh`：`gh api --method POST repos/<owner>/<repo>/issues/<child>/dependencies/blocked_by -F issue_id=<blocker-db-id>`，`<blocker-db-id>` 是阻塞方的数据库 id。原生依赖不可用时退回在子票正文顶部写 `Blocked by: #<n>, #<n>`。**所有阻塞方都关闭**，这张票才算解锁。
-- **数未关闭的阻塞方**：`gh api repos/<owner>/<repo>/issues/<n> --jq .issue_dependencies_summary.blocked_by`（只算未关闭的，`0` 即可以开工）。`gh issue view <n> --json blockedBy` 会把已关闭的也列出来，要自己过滤：`--jq '[.blockedBy.nodes[] | select(.state == "OPEN")] | length'`。
-- **评论**：`gh issue comment <number> --body "..."`。
-- **加/去标签**：`gh issue edit <number> --add-label "..."` / `--remove-label "..."`。
-- **关闭**：先 `gh issue comment <number> --body "..."` 说明原因，再 `gh issue close <number>`。对已关闭的票执行 `gh issue close --comment` 会**丢掉**评论但仍以 0 退出，所以永远分两步。
+- **Create a ticket**: `gh issue create --title "..." --body "..."`. Use a heredoc for multi-line bodies.
+- **Read a ticket**: `gh issue view <number> --json number,title,body,labels,comments`.
+- **List tickets**: `gh issue list --state open --json number,title,body,labels,comments --jq '[.[] | {number, title, body, labels: [.labels[].name], comments: [.comments[].body]}]'`, adding `--label` and `--state` filters as needed.
+- **Make one ticket a sub-issue of another**: `gh issue create --parent <parent> ...`, or afterwards `gh issue edit <parent> --add-sub-issue <child>` (`gh` 2.94+). On older `gh`: `gh api --method POST repos/<owner>/<repo>/issues/<parent>/sub_issues -F sub_issue_id=<child-db-id>`, where `<child-db-id>` is the child's **database id** (`gh api repos/<owner>/<repo>/issues/<n> --jq .id`), not `#number` and not `node_id`. Without sub-issue support, write `Part of #<parent>` at the top of the child's body.
+- **Blocking**: use GitHub's native issue dependency; it is the only canonical representation the UI shows. To add an edge: `gh issue create --blocked-by <n>,<n> ...`, or `gh issue edit <child> --add-blocked-by <blocker>` (`gh` 2.94+). On older `gh`: `gh api --method POST repos/<owner>/<repo>/issues/<child>/dependencies/blocked_by -F issue_id=<blocker-db-id>`, where `<blocker-db-id>` is the blocker's database id. When native dependencies are unavailable, fall back to writing `Blocked by: #<n>, #<n>` at the top of the child's body. A ticket unlocks only when **every** blocker is closed.
+- **Count open blockers**: `gh api repos/<owner>/<repo>/issues/<n> --jq .issue_dependencies_summary.blocked_by` (counts unclosed ones only; `0` means work can start). `gh issue view <n> --json blockedBy` also lists closed ones, so filter them yourself: `--jq '[.blockedBy.nodes[] | select(.state == "OPEN")] | length'`.
+- **Comment**: `gh issue comment <number> --body "..."`.
+- **Add / remove labels**: `gh issue edit <number> --add-label "..."` / `--remove-label "..."`.
+- **Close**: state the reason with `gh issue comment <number> --body "..."` first, then `gh issue close <number>`. Running `gh issue close --comment` on an already-closed ticket **drops** the comment yet still exits 0, so always use two steps.
 
-仓库从 `git remote -v` 推断，在克隆目录内 `gh` 自动完成。
+The repository is inferred from `git remote -v`; inside a clone `gh` does it automatically.
 
-只往用户自己的仓库建票。**绝不要**往 `mattpocock/skills`（这些技能的来源仓库）建票，除非用户就是它的 owner。
-`gh` 有可能默认指到别的仓库，所以每次会话第一次 `gh issue create` 之前，先用
-`gh repo view --json nameWithOwner` 确认目标是 `cnzgray/orca-mattpocock-workflow`，不一致就问用户。
+Only create tickets in the user's own repositories. **Never** create tickets in `mattpocock/skills` (the upstream of these skills) unless the user owns it. `gh` may default to another repository, so before the session's first `gh issue create`, confirm the target is `cnzgray/orca-mattpocock-workflow` with `gh repo view --json nameWithOwner`; if it differs, ask the user.
 
-## 发布到工单后端
+## Publishing to the ticket backend
 
-发布 spec 时先定目标票：如果用户给了票号或 URL，或对话里已经指明了某张票，就用
-`gh issue edit <number> --body-file <path>` 就地更新，不要再建一张。发布 tickets 时，每张票默认新建一张 issue，除非它已经存在。
+When publishing a spec, pick the target ticket first: if the user gave a ticket number or URL, or the conversation already points at a ticket, update it in place with `gh issue edit <number> --body-file <path>` instead of opening another. When publishing tickets, create one issue per ticket by default, unless one already exists.
 
-没有目标线索时，先在打开的 issue 里搜一遍有没有对得上的，问过用户再建。同一个 spec 绝不建第二张票。
+With no target clue, search the open issues for a match first, and ask the user before creating anything. Never open a second ticket for the same spec.
 
-## 取当前这张票
+## Reading the current ticket
 
-按上面的 **读票** 读。
+Use **Read a ticket** above.
 
-## Wayfinding 操作
+## Wayfinding operations
 
-供 `/wayfinder` 使用。**map** 是一张 issue，**子票**是它的 child issue。
+Used by `/wayfinder`. The **map** is one issue; its **child tickets** are child issues.
 
-- **Map**：单张 issue，带 `wayfinder:map` 标签，正文放 Notes / Decisions-so-far / Fog。`gh issue create --label wayfinder:map`。
-- **子票**：挂成 map 的 GitHub sub-issue（见 **把一张票挂成子票**）。子票能力不可用时，把子票加进 map 正文的 task list，并在子票正文顶部写 `Part of #<map>`。标签用 `wayfinder:<type>`（`research`/`prototype`/`grilling`/`task`）。被认领后，票指派给驱动它的开发者。
-- **阻塞**：见 **阻塞关系**。
-- **Frontier 查询**：列出 map 所有未关闭子票（`gh issue list --state open`，范围限定在 map 的 sub-issues / task list），丢掉带未关闭阻塞方的（见 **数未关闭的阻塞方**，或 `Blocked by` 行里指向未关闭票的）和已有 assignee 的；按 map 顺序取第一个。
-- **认领**：`gh issue edit <n> --add-assignee @me`，这是本会话的第一次写操作。
-- **结案**：`gh issue comment <n> --body "<答案>"`，然后 `gh issue close <n>`，再把一条上下文指针（摘要 + 链接）追加到 map 的 Decisions-so-far。
+- **Map**: a single issue labeled `wayfinder:map`, its body holding Notes / Decisions-so-far / Fog. `gh issue create --label wayfinder:map`.
+- **Child tickets**: attach them as GitHub sub-issues of the map (see **Make one ticket a sub-issue of another**). Without sub-issue support, add the children to a task list in the map body and write `Part of #<map>` at the top of each child body. Labels are `wayfinder:<type>` (`research`/`prototype`/`grilling`/`task`). Once claimed, the ticket is assigned to the developer driving it.
+- **Blocking**: see **Blocking**.
+- **Frontier query**: list every open child of the map (`gh issue list --state open`, scoped to the map's sub-issues / task list), drop those with open blockers (see **Count open blockers**, or a `Blocked by` line naming an open ticket) and those already assigned; take the first in map order.
+- **Claim**: `gh issue edit <n> --add-assignee @me`; this is the session's first write.
+- **Close out**: `gh issue comment <n> --body "<answer>"`, then `gh issue close <n>`, then append a context pointer (summary + link) to the map's Decisions-so-far.
 
-## 本仓库特有的约束
+## Constraints specific to this repository
 
-标签字符串是产品契约：`src/protocol/labels.ts` 的 `TRACKER_LABELS` 就是宿主与面板读取的那七个名字，
-改标签名要同时改该文件、`docs/agents/triage-labels.md` 和 GitHub 上的标签，缺一处就会让面板判定失准。
+Label strings are a product contract: `TRACKER_LABELS` in `src/protocol/labels.ts` holds the seven names the host and the panel read. Renaming a label means changing that file, `docs/agents/triage-labels.md` and the labels on GitHub together; miss one and the panel's verdicts drift.

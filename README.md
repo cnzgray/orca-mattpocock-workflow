@@ -247,8 +247,8 @@ a new approval. Listing status:
 - The panel follows the `language` plugin setting (`auto` / `zh-CN` / `en`); `auto` follows Orca's
   locale. Message catalogs live in `src/protocol/i18n.ts`.
 - Public documentation is maintained in English and Simplified Chinese (`*.zh-CN.md`). Agent
-  operating docs (`AGENTS.md`, `CLAUDE.md`, `docs/agents/`) and skill prompts stay in Simplified
-  Chinese because they configure this repository's Chinese-language agent workflow.
+  operating docs (`AGENTS.md`, `CLAUDE.md`, `docs/agents/`) and skill prompts are English only,
+  because they address agents rather than users.
 - Orca's manifest schema has no per-locale fields, so the manifest description and command titles are
   English; everything rendered inside the panel is localized. The documentation index and language
   policy are in [docs/README.md](docs/README.md).

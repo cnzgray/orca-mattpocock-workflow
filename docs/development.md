@@ -192,6 +192,23 @@ orca plugin dev unload .        # remove the development folder
 Unloading needs no approval; an installed plugin with the same key comes back and asks for approval
 again according to its own permissions.
 
+## Branches and merging
+
+`main` is trunk. Fork a short-lived `<bugfix|feat>/<ticket>[-<slug>]` branch and land it linearly:
+
+```bash
+git switch main && git pull --ff-only
+git switch bugfix/12-gitlab
+git rebase main
+git switch main && git merge --ff-only bugfix/12-gitlab
+git branch -d bugfix/12-gitlab
+```
+
+A merge commit (`git merge --no-ff`, or GitHub's "Create a merge commit") is not used: it splits
+`main` into two lines, so `git log --oneline`, `git bisect` and commit counts stop matching the
+release sequence. The local configuration sets `merge.ff=only` and `pull.rebase=true`; PRs are
+squash- or rebase-merged on GitHub.
+
 ## Publishing
 
 Loading a development folder is not a distribution format. Publishing goes through a Git tree: the

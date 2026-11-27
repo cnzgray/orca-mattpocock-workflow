@@ -209,7 +209,7 @@ orca plugin install cnzgray/orca-mattpocock-workflow@v0.6.2
 - 面板跟随 `language` 插件设置（`auto` / `zh-CN` / `en`）；`auto` 跟随 Orca 的界面语言。
   消息目录在 `src/protocol/i18n.ts`。
 - 公开文档同时维护英文与简体中文（`*.zh-CN.md`）。代理运行文档（`AGENTS.md`、`CLAUDE.md`、
-  `docs/agents/`）与技能正文保持简体中文，因为它们配置本仓库的中文代理工作流。
+  `docs/agents/`）与技能正文只用英文，因为它们面向代理而非用户。
 - Orca 清单 schema 没有按语言分字段的能力，清单描述与命令标题用英文；面板内部渲染的内容
   全部跟随语言设置。文档索引与语言约定见 [docs/README.zh-CN.md](docs/README.zh-CN.md)。
 
